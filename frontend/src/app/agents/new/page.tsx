@@ -36,6 +36,7 @@ export default function NewAgentPage() {
       setAgExecutor(a.executor_type);
       setAgModel(a.model);
       setAgPrompt(a.system_prompt || "");
+      setCode(a.source_code || "");
       setAgTools(a.tools_config ? JSON.stringify(a.tools_config, null, 2) : "");
       setAgSettings(a.model_settings ? JSON.stringify(a.model_settings, null, 2) : "");
       setAgTags((a.tags || []).join(", "));
@@ -57,6 +58,7 @@ export default function NewAgentPage() {
         executor_type: agExecutor,
         model: agModel,
         system_prompt: agPrompt || null,
+        source_code: code.trim() || null,
         tools_config: toolsConfig,
         model_settings: modelSettings,
         tags: agTags.split(",").map((t) => t.trim()).filter(Boolean),

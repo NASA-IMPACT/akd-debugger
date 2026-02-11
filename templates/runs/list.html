@@ -1,51 +1,102 @@
-{% extends "base.html" %}
-{% block title %}Runs — Benchmark App{% endblock %}
-{% block content %}
+{% extends "base.html" %} {% block title %}Runs — Benchmark App{% endblock %} {%
+block content %}
 <div class="page-header">
     <h1>Runs</h1>
-    <div style="display:flex;gap:0.5rem">
-        <button class="btn btn-secondary" onclick="showImportModal()">Import JSON</button>
+    <div style="display: flex; gap: 0.5rem">
+        <button class="btn btn-secondary" onclick="showImportModal()">
+            Import JSON
+        </button>
         <a href="/runs/new" class="btn btn-primary">+ New Run</a>
     </div>
 </div>
 
 <!-- Import Modal -->
-<div class="modal-overlay" id="importModal" style="display:none">
+<div class="modal-overlay" id="importModal" style="display: none">
     <div class="modal-box">
         <div class="modal-header">
             <h3>Import Run from JSON</h3>
-            <button class="modal-close" onclick="document.getElementById('importModal').style.display='none'">&times;</button>
+            <button
+                class="modal-close"
+                onclick="
+                    document.getElementById('importModal').style.display =
+                        'none'
+                "
+            >
+                &times;
+            </button>
         </div>
-        <form onsubmit="return importRun(event)">
+        <form onsubmit="return importRun(event);">
             <div class="form-group">
                 <label>Label</label>
-                <input type="text" id="importLabel" required class="form-control" placeholder="e.g. NC Run 1">
+                <input
+                    type="text"
+                    id="importLabel"
+                    required
+                    class="form-control"
+                    placeholder="e.g. NC Run 1"
+                />
             </div>
             <div class="form-group">
                 <label>JSON Directory</label>
-                <div style="display:flex;gap:0.5rem">
-                    <input type="text" id="importJsonDir" required class="form-control" placeholder="~/benchmark_app_data/run_0/json">
-                    <button type="button" class="btn btn-secondary" onclick="openBrowser()" style="white-space:nowrap">Browse</button>
+                <div style="display: flex; gap: 0.5rem">
+                    <input
+                        type="text"
+                        id="importJsonDir"
+                        required
+                        class="form-control"
+                        placeholder="~/axiom_data/run_0/json"
+                    />
+                    <button
+                        type="button"
+                        class="btn btn-secondary"
+                        onclick="openBrowser()"
+                        style="white-space: nowrap"
+                    >
+                        Browse
+                    </button>
                 </div>
-                <span class="text-muted text-sm">Path to folder with 1.json, 2.json, ... files</span>
+                <span class="text-muted text-sm"
+                    >Path to folder with 1.json, 2.json, ... files</span
+                >
             </div>
             <div class="form-row">
                 <div class="form-group">
                     <label>Dataset</label>
-                    <select id="importSuite" required class="form-control"></select>
+                    <select
+                        id="importSuite"
+                        required
+                        class="form-control"
+                    ></select>
                 </div>
                 <div class="form-group">
                     <label>Agent</label>
-                    <select id="importAgent" required class="form-control"></select>
+                    <select
+                        id="importAgent"
+                        required
+                        class="form-control"
+                    ></select>
                 </div>
             </div>
             <div class="form-group">
                 <label>Tags (comma-separated)</label>
-                <input type="text" id="importTags" class="form-control">
+                <input type="text" id="importTags" class="form-control" />
             </div>
-            <div id="importResult" class="text-sm" style="margin-top:0.5rem"></div>
+            <div
+                id="importResult"
+                class="text-sm"
+                style="margin-top: 0.5rem"
+            ></div>
             <div class="form-actions">
-                <button type="button" class="btn btn-secondary" onclick="document.getElementById('importModal').style.display='none'">Cancel</button>
+                <button
+                    type="button"
+                    class="btn btn-secondary"
+                    onclick="
+                        document.getElementById('importModal').style.display =
+                            'none'
+                    "
+                >
+                    Cancel
+                </button>
                 <button type="submit" class="btn btn-primary">Import</button>
             </div>
         </form>
@@ -53,21 +104,52 @@
 </div>
 
 <!-- Folder Browser Modal -->
-<div class="modal-overlay" id="browseModal" style="display:none">
+<div class="modal-overlay" id="browseModal" style="display: none">
     <div class="modal-box">
         <div class="modal-header">
             <h3>Select Folder</h3>
-            <button class="modal-close" onclick="closeBrowser()">&times;</button>
+            <button class="modal-close" onclick="closeBrowser()">
+                &times;
+            </button>
         </div>
         <div class="browse-path-bar">
-            <button class="btn btn-sm" onclick="browseUp()" id="browseUpBtn" title="Go up">&#8593;</button>
-            <input type="text" id="browsePath" class="form-control" style="font-size:0.85rem" onkeydown="if(event.key==='Enter'){browseGo(this.value)}">
+            <button
+                class="btn btn-sm"
+                onclick="browseUp()"
+                id="browseUpBtn"
+                title="Go up"
+            >
+                &#8593;
+            </button>
+            <input
+                type="text"
+                id="browsePath"
+                class="form-control"
+                style="font-size: 0.85rem"
+                onkeydown="
+                    if (event.key === 'Enter') {
+                        browseGo(this.value);
+                    }
+                "
+            />
         </div>
         <div class="browse-list" id="browseList"></div>
         <div class="browse-info text-sm text-muted" id="browseInfo"></div>
         <div class="form-actions">
-            <button type="button" class="btn btn-secondary" onclick="closeBrowser()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="selectBrowsedDir()">Select This Folder</button>
+            <button
+                type="button"
+                class="btn btn-secondary"
+                onclick="closeBrowser()"
+            >
+                Cancel
+            </button>
+            <button
+                type="button"
+                class="btn btn-primary"
+                onclick="selectBrowsedDir()"
+            >
+                Select This Folder
+            </button>
         </div>
     </div>
 </div>
@@ -78,7 +160,13 @@
     <table class="data-table" id="runsTable">
         <thead>
             <tr>
-                <th style="width:40px"><input type="checkbox" id="selectAll" onchange="toggleAll(this)"></th>
+                <th style="width: 40px">
+                    <input
+                        type="checkbox"
+                        id="selectAll"
+                        onchange="toggleAll(this)"
+                    />
+                </th>
                 <th>Label</th>
                 <th>Dataset</th>
                 <th>Agent</th>
@@ -86,67 +174,134 @@
                 <th>Progress</th>
                 <th>Tags</th>
                 <th>Created</th>
-                <th style="width:60px"></th>
+                <th style="width: 60px"></th>
             </tr>
         </thead>
         <tbody id="runsBody"></tbody>
     </table>
-    <div class="actions-bar" style="display:flex;gap:0.75rem">
-        <button type="submit" class="btn btn-secondary" id="compareBtn" disabled>Compare Selected</button>
-        <button type="button" class="btn btn-danger btn-sm" id="deleteSelectedBtn" disabled onclick="showDeleteModal(getSelectedIds())">Delete Selected</button>
+    <div class="actions-bar" style="display: flex; gap: 0.75rem">
+        <button
+            type="submit"
+            class="btn btn-secondary"
+            id="compareBtn"
+            disabled
+        >
+            Compare Selected
+        </button>
+        <button
+            type="button"
+            class="btn btn-danger btn-sm"
+            id="deleteSelectedBtn"
+            disabled
+            onclick="showDeleteModal(getSelectedIds())"
+        >
+            Delete Selected
+        </button>
     </div>
 </form>
 
 <!-- Delete confirmation modal -->
-<div class="rerun-modal-overlay" id="listDeleteOverlay" style="display:none" onclick="if(event.target===this)closeListDeleteModal()">
-    <div class="rerun-modal" style="width:420px">
+<div
+    class="rerun-modal-overlay"
+    id="listDeleteOverlay"
+    style="display: none"
+    onclick="if (event.target === this) closeListDeleteModal();"
+>
+    <div class="rerun-modal" style="width: 420px">
         <div class="rerun-modal-header">
             <h3 id="listDeleteTitle">Delete Run</h3>
-            <button class="rerun-modal-close" onclick="closeListDeleteModal()">&times;</button>
+            <button class="rerun-modal-close" onclick="closeListDeleteModal()">
+                &times;
+            </button>
         </div>
         <div class="rerun-modal-body">
-            <p id="listDeleteMsg" style="margin-bottom:1rem"></p>
-            <label class="rerun-query-item" style="padding:0.5rem;background:#fff5f5;border:1px solid #fee;border-radius:6px">
-                <input type="checkbox" id="listDeleteFilesCheck">
-                <span style="color:#c82333">Also delete output files from disk</span>
+            <p id="listDeleteMsg" style="margin-bottom: 1rem"></p>
+            <label
+                class="rerun-query-item"
+                style="
+                    padding: 0.5rem;
+                    background: #fff5f5;
+                    border: 1px solid #fee;
+                    border-radius: 6px;
+                "
+            >
+                <input type="checkbox" id="listDeleteFilesCheck" />
+                <span style="color: #c82333"
+                    >Also delete output files from disk</span
+                >
             </label>
         </div>
         <div class="rerun-modal-footer">
-            <button class="btn btn-secondary" onclick="closeListDeleteModal()">Cancel</button>
-            <button class="btn btn-danger" id="listDeleteConfirmBtn" onclick="confirmListDelete()">Delete</button>
+            <button class="btn btn-secondary" onclick="closeListDeleteModal()">
+                Cancel
+            </button>
+            <button
+                class="btn btn-danger"
+                id="listDeleteConfirmBtn"
+                onclick="confirmListDelete()"
+            >
+                Delete
+            </button>
         </div>
     </div>
 </div>
 
 <script>
-const tag = new URLSearchParams(location.search).get('tag') || '';
-let _deleteTargetIds = [];
+    const tag = new URLSearchParams(location.search).get("tag") || "";
+    let _deleteTargetIds = [];
 
-async function loadRuns() {
-    const url = tag ? `/api/runs?tag=${encodeURIComponent(tag)}` : '/api/runs';
-    const runs = await fetch(url).then(r => r.json());
-    const tbody = document.getElementById('runsBody');
-    tbody.innerHTML = '';
-    runs.forEach(run => {
-        const tr = document.createElement('tr');
-        tr.style.cursor = 'pointer';
-        tr.onclick = (e) => { if (e.target.type !== 'checkbox' && !e.target.closest('.run-actions-wrap')) window.location = `/runs/${run.id}`; };
-        const statusIcon = run.status === 'completed' ? '●' : run.status === 'running' ? '◐' : run.status === 'failed' ? '✗' : '○';
-        const statusClass = 'status-' + run.status;
-        const progress = run.status === 'running' ? `${run.progress_current}/${run.progress_total}` : '';
-        const progressBar = run.status === 'running'
-            ? `<div class="progress-bar"><div class="progress-fill" style="width:${(run.progress_current/run.progress_total*100).toFixed(0)}%"></div></div>`
-            : '';
-        const elapsed = run.completed_at && run.started_at
-            ? Math.round((new Date(run.completed_at) - new Date(run.started_at)) / 1000 / 60) + 'm'
-            : '';
-        const tags = (run.tags || []).map(t => `<span class="tag-chip">${t}</span>`).join(' ');
-        const safeLabel = run.label.replace(/'/g, "\\'");
-        tr.innerHTML = `
+    async function loadRuns() {
+        const url = tag
+            ? `/api/runs?tag=${encodeURIComponent(tag)}`
+            : "/api/runs";
+        const runs = await fetch(url).then((r) => r.json());
+        const tbody = document.getElementById("runsBody");
+        tbody.innerHTML = "";
+        runs.forEach((run) => {
+            const tr = document.createElement("tr");
+            tr.style.cursor = "pointer";
+            tr.onclick = (e) => {
+                if (
+                    e.target.type !== "checkbox" &&
+                    !e.target.closest(".run-actions-wrap")
+                )
+                    window.location = `/runs/${run.id}`;
+            };
+            const statusIcon =
+                run.status === "completed"
+                    ? "●"
+                    : run.status === "running"
+                      ? "◐"
+                      : run.status === "failed"
+                        ? "✗"
+                        : "○";
+            const statusClass = "status-" + run.status;
+            const progress =
+                run.status === "running"
+                    ? `${run.progress_current}/${run.progress_total}`
+                    : "";
+            const progressBar =
+                run.status === "running"
+                    ? `<div class="progress-bar"><div class="progress-fill" style="width:${((run.progress_current / run.progress_total) * 100).toFixed(0)}%"></div></div>`
+                    : "";
+            const elapsed =
+                run.completed_at && run.started_at
+                    ? Math.round(
+                          (new Date(run.completed_at) -
+                              new Date(run.started_at)) /
+                              1000 /
+                              60,
+                      ) + "m"
+                    : "";
+            const tags = (run.tags || [])
+                .map((t) => `<span class="tag-chip">${t}</span>`)
+                .join(" ");
+            const safeLabel = run.label.replace(/'/g, "\\'");
+            tr.innerHTML = `
             <td><input type="checkbox" name="run_ids" value="${run.id}" onchange="updateCompareBtn()" onclick="event.stopPropagation()"></td>
             <td><strong>${run.label}</strong></td>
-            <td>${run.suite_name || ''}</td>
-            <td>${run.agent_name || ''}</td>
+            <td>${run.suite_name || ""}</td>
+            <td>${run.agent_name || ""}</td>
             <td><span class="${statusClass}">${statusIcon} ${run.status}</span> ${elapsed}</td>
             <td>${progress} ${progressBar}</td>
             <td>${tags}</td>
@@ -165,167 +320,222 @@ async function loadRuns() {
                 </div>
             </td>
         `;
-        tbody.appendChild(tr);
-    });
-}
-
-function toggleRowMenu(btn) {
-    const menu = btn.nextElementSibling;
-    const wasOpen = menu.classList.contains('open');
-    closeAllMenus();
-    if (!wasOpen) {
-        menu.classList.add('open');
-        setTimeout(() => document.addEventListener('click', closeAllMenus, {once: true}), 0);
-    }
-}
-function closeAllMenus() {
-    document.querySelectorAll('.run-actions-menu.open').forEach(m => m.classList.remove('open'));
-}
-
-function toggleAll(cb) {
-    document.querySelectorAll('input[name="run_ids"]').forEach(c => c.checked = cb.checked);
-    updateCompareBtn();
-}
-function updateCompareBtn() {
-    const checked = document.querySelectorAll('input[name="run_ids"]:checked').length;
-    document.getElementById('compareBtn').disabled = checked < 2;
-    document.getElementById('deleteSelectedBtn').disabled = checked < 1;
-}
-
-function getSelectedIds() {
-    return [...document.querySelectorAll('input[name="run_ids"]:checked')].map(c => parseInt(c.value));
-}
-
-function showDeleteModal(ids, label) {
-    if (!ids || !ids.length) return;
-    _deleteTargetIds = ids;
-    document.getElementById('listDeleteFilesCheck').checked = false;
-    if (ids.length === 1 && label) {
-        document.getElementById('listDeleteTitle').textContent = 'Delete Run';
-        document.getElementById('listDeleteMsg').innerHTML = `Delete <strong>${label}</strong> from the database?`;
-    } else {
-        document.getElementById('listDeleteTitle').textContent = `Delete ${ids.length} Run(s)`;
-        document.getElementById('listDeleteMsg').innerHTML = `Delete <strong>${ids.length} run(s)</strong> and their results from the database?`;
-    }
-    const btn = document.getElementById('listDeleteConfirmBtn');
-    btn.disabled = false;
-    btn.textContent = 'Delete';
-    document.getElementById('listDeleteOverlay').style.display = 'flex';
-}
-function closeListDeleteModal() {
-    document.getElementById('listDeleteOverlay').style.display = 'none';
-}
-async function confirmListDelete() {
-    const deleteFiles = document.getElementById('listDeleteFilesCheck').checked;
-    const btn = document.getElementById('listDeleteConfirmBtn');
-    btn.disabled = true;
-    btn.textContent = 'Deleting...';
-    const qs = deleteFiles ? '?delete_data=true' : '';
-    for (const id of _deleteTargetIds) {
-        await fetch(`/api/runs/${id}${qs}`, { method: 'DELETE' });
-    }
-    closeListDeleteModal();
-    loadRuns();
-}
-
-async function showImportModal() {
-    const [suites, agents] = await Promise.all([
-        fetch('/api/suites').then(r => r.json()),
-        fetch('/api/agents').then(r => r.json()),
-    ]);
-    const ss = document.getElementById('importSuite');
-    ss.innerHTML = '';
-    suites.forEach(s => { const o = document.createElement('option'); o.value = s.id; o.textContent = s.name; ss.appendChild(o); });
-    const as = document.getElementById('importAgent');
-    as.innerHTML = '';
-    agents.forEach(a => { const o = document.createElement('option'); o.value = a.id; o.textContent = `${a.name} (${a.model})`; as.appendChild(o); });
-    document.getElementById('importResult').textContent = '';
-    document.getElementById('importModal').style.display = 'flex';
-}
-
-async function importRun(e) {
-    e.preventDefault();
-    const tags = document.getElementById('importTags').value.split(',').map(t => t.trim()).filter(Boolean);
-    const body = {
-        suite_id: parseInt(document.getElementById('importSuite').value),
-        agent_config_id: parseInt(document.getElementById('importAgent').value),
-        label: document.getElementById('importLabel').value,
-        json_dir: document.getElementById('importJsonDir').value,
-        tags: tags,
-    };
-    const resp = await fetch('/api/runs/import', { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
-    const data = await resp.json();
-    if (resp.ok) {
-        document.getElementById('importResult').textContent = `Imported ${data.progress_current} results`;
-        document.getElementById('importResult').style.color = '#16a34a';
-        loadRuns();
-        setTimeout(() => { document.getElementById('importModal').style.display = 'none'; }, 1000);
-    } else {
-        document.getElementById('importResult').textContent = data.detail || 'Error';
-        document.getElementById('importResult').style.color = '#dc3545';
-    }
-    return false;
-}
-
-// --- Folder Browser ---
-let browseCurrentPath = '~';
-async function openBrowser() {
-    const startPath = document.getElementById('importJsonDir').value.trim() || '~';
-    await browseGo(startPath);
-    document.getElementById('browseModal').style.display = 'flex';
-}
-function closeBrowser() {
-    document.getElementById('browseModal').style.display = 'none';
-}
-async function browseGo(path) {
-    try {
-        const resp = await fetch(`/api/browse?path=${encodeURIComponent(path)}`);
-        const data = await resp.json();
-        if (!resp.ok) {
-            document.getElementById('browseInfo').textContent = data.detail || 'Error';
-            document.getElementById('browseInfo').style.color = '#dc3545';
-            return;
-        }
-        browseCurrentPath = data.current;
-        document.getElementById('browsePath').value = data.current;
-        document.getElementById('browseUpBtn').disabled = !data.parent;
-        const list = document.getElementById('browseList');
-        list.innerHTML = '';
-        const jsonCount = data.items.filter(i => i.type === 'file').length;
-        const dirCount = data.items.filter(i => i.type === 'dir').length;
-        document.getElementById('browseInfo').textContent = `${dirCount} folder(s), ${jsonCount} .json file(s)`;
-        document.getElementById('browseInfo').style.color = jsonCount > 0 ? '#16a34a' : '#6c757d';
-        data.items.forEach(item => {
-            const row = document.createElement('div');
-            row.className = 'browse-item' + (item.type === 'dir' ? ' browse-dir' : ' browse-file');
-            if (item.type === 'dir') {
-                row.innerHTML = `<span class="browse-icon">&#128193;</span> ${item.name}`;
-                row.onclick = () => browseGo(item.path);
-            } else {
-                row.innerHTML = `<span class="browse-icon">&#128196;</span> ${item.name}`;
-            }
-            list.appendChild(row);
+            tbody.appendChild(tr);
         });
-        if (data.items.length === 0) {
-            list.innerHTML = '<div class="browse-empty">Empty folder</div>';
-        }
-    } catch(e) {
-        document.getElementById('browseInfo').textContent = 'Error: ' + e.message;
-        document.getElementById('browseInfo').style.color = '#dc3545';
     }
-}
-function browseUp() {
-    const parts = browseCurrentPath.split('/');
-    if (parts.length > 1) {
-        parts.pop();
-        browseGo(parts.join('/') || '/');
-    }
-}
-function selectBrowsedDir() {
-    document.getElementById('importJsonDir').value = browseCurrentPath;
-    closeBrowser();
-}
 
-loadRuns();
+    function toggleRowMenu(btn) {
+        const menu = btn.nextElementSibling;
+        const wasOpen = menu.classList.contains("open");
+        closeAllMenus();
+        if (!wasOpen) {
+            menu.classList.add("open");
+            setTimeout(
+                () =>
+                    document.addEventListener("click", closeAllMenus, {
+                        once: true,
+                    }),
+                0,
+            );
+        }
+    }
+    function closeAllMenus() {
+        document
+            .querySelectorAll(".run-actions-menu.open")
+            .forEach((m) => m.classList.remove("open"));
+    }
+
+    function toggleAll(cb) {
+        document
+            .querySelectorAll('input[name="run_ids"]')
+            .forEach((c) => (c.checked = cb.checked));
+        updateCompareBtn();
+    }
+    function updateCompareBtn() {
+        const checked = document.querySelectorAll(
+            'input[name="run_ids"]:checked',
+        ).length;
+        document.getElementById("compareBtn").disabled = checked < 2;
+        document.getElementById("deleteSelectedBtn").disabled = checked < 1;
+    }
+
+    function getSelectedIds() {
+        return [
+            ...document.querySelectorAll('input[name="run_ids"]:checked'),
+        ].map((c) => parseInt(c.value));
+    }
+
+    function showDeleteModal(ids, label) {
+        if (!ids || !ids.length) return;
+        _deleteTargetIds = ids;
+        document.getElementById("listDeleteFilesCheck").checked = false;
+        if (ids.length === 1 && label) {
+            document.getElementById("listDeleteTitle").textContent =
+                "Delete Run";
+            document.getElementById("listDeleteMsg").innerHTML =
+                `Delete <strong>${label}</strong> from the database?`;
+        } else {
+            document.getElementById("listDeleteTitle").textContent =
+                `Delete ${ids.length} Run(s)`;
+            document.getElementById("listDeleteMsg").innerHTML =
+                `Delete <strong>${ids.length} run(s)</strong> and their results from the database?`;
+        }
+        const btn = document.getElementById("listDeleteConfirmBtn");
+        btn.disabled = false;
+        btn.textContent = "Delete";
+        document.getElementById("listDeleteOverlay").style.display = "flex";
+    }
+    function closeListDeleteModal() {
+        document.getElementById("listDeleteOverlay").style.display = "none";
+    }
+    async function confirmListDelete() {
+        const deleteFiles = document.getElementById(
+            "listDeleteFilesCheck",
+        ).checked;
+        const btn = document.getElementById("listDeleteConfirmBtn");
+        btn.disabled = true;
+        btn.textContent = "Deleting...";
+        const qs = deleteFiles ? "?delete_data=true" : "";
+        for (const id of _deleteTargetIds) {
+            await fetch(`/api/runs/${id}${qs}`, { method: "DELETE" });
+        }
+        closeListDeleteModal();
+        loadRuns();
+    }
+
+    async function showImportModal() {
+        const [suites, agents] = await Promise.all([
+            fetch("/api/suites").then((r) => r.json()),
+            fetch("/api/agents").then((r) => r.json()),
+        ]);
+        const ss = document.getElementById("importSuite");
+        ss.innerHTML = "";
+        suites.forEach((s) => {
+            const o = document.createElement("option");
+            o.value = s.id;
+            o.textContent = s.name;
+            ss.appendChild(o);
+        });
+        const as = document.getElementById("importAgent");
+        as.innerHTML = "";
+        agents.forEach((a) => {
+            const o = document.createElement("option");
+            o.value = a.id;
+            o.textContent = `${a.name} (${a.model})`;
+            as.appendChild(o);
+        });
+        document.getElementById("importResult").textContent = "";
+        document.getElementById("importModal").style.display = "flex";
+    }
+
+    async function importRun(e) {
+        e.preventDefault();
+        const tags = document
+            .getElementById("importTags")
+            .value.split(",")
+            .map((t) => t.trim())
+            .filter(Boolean);
+        const body = {
+            suite_id: parseInt(document.getElementById("importSuite").value),
+            agent_config_id: parseInt(
+                document.getElementById("importAgent").value,
+            ),
+            label: document.getElementById("importLabel").value,
+            json_dir: document.getElementById("importJsonDir").value,
+            tags: tags,
+        };
+        const resp = await fetch("/api/runs/import", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        const data = await resp.json();
+        if (resp.ok) {
+            document.getElementById("importResult").textContent =
+                `Imported ${data.progress_current} results`;
+            document.getElementById("importResult").style.color = "#16a34a";
+            loadRuns();
+            setTimeout(() => {
+                document.getElementById("importModal").style.display = "none";
+            }, 1000);
+        } else {
+            document.getElementById("importResult").textContent =
+                data.detail || "Error";
+            document.getElementById("importResult").style.color = "#dc3545";
+        }
+        return false;
+    }
+
+    // --- Folder Browser ---
+    let browseCurrentPath = "~";
+    async function openBrowser() {
+        const startPath =
+            document.getElementById("importJsonDir").value.trim() || "~";
+        await browseGo(startPath);
+        document.getElementById("browseModal").style.display = "flex";
+    }
+    function closeBrowser() {
+        document.getElementById("browseModal").style.display = "none";
+    }
+    async function browseGo(path) {
+        try {
+            const resp = await fetch(
+                `/api/browse?path=${encodeURIComponent(path)}`,
+            );
+            const data = await resp.json();
+            if (!resp.ok) {
+                document.getElementById("browseInfo").textContent =
+                    data.detail || "Error";
+                document.getElementById("browseInfo").style.color = "#dc3545";
+                return;
+            }
+            browseCurrentPath = data.current;
+            document.getElementById("browsePath").value = data.current;
+            document.getElementById("browseUpBtn").disabled = !data.parent;
+            const list = document.getElementById("browseList");
+            list.innerHTML = "";
+            const jsonCount = data.items.filter(
+                (i) => i.type === "file",
+            ).length;
+            const dirCount = data.items.filter((i) => i.type === "dir").length;
+            document.getElementById("browseInfo").textContent =
+                `${dirCount} folder(s), ${jsonCount} .json file(s)`;
+            document.getElementById("browseInfo").style.color =
+                jsonCount > 0 ? "#16a34a" : "#6c757d";
+            data.items.forEach((item) => {
+                const row = document.createElement("div");
+                row.className =
+                    "browse-item" +
+                    (item.type === "dir" ? " browse-dir" : " browse-file");
+                if (item.type === "dir") {
+                    row.innerHTML = `<span class="browse-icon">&#128193;</span> ${item.name}`;
+                    row.onclick = () => browseGo(item.path);
+                } else {
+                    row.innerHTML = `<span class="browse-icon">&#128196;</span> ${item.name}`;
+                }
+                list.appendChild(row);
+            });
+            if (data.items.length === 0) {
+                list.innerHTML = '<div class="browse-empty">Empty folder</div>';
+            }
+        } catch (e) {
+            document.getElementById("browseInfo").textContent =
+                "Error: " + e.message;
+            document.getElementById("browseInfo").style.color = "#dc3545";
+        }
+    }
+    function browseUp() {
+        const parts = browseCurrentPath.split("/");
+        if (parts.length > 1) {
+            parts.pop();
+            browseGo(parts.join("/") || "/");
+        }
+    }
+    function selectBrowsedDir() {
+        document.getElementById("importJsonDir").value = browseCurrentPath;
+        closeBrowser();
+    }
+
+    loadRuns();
 </script>
 {% endblock %}

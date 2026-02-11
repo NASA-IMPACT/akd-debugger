@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Any
+
 from pydantic import BaseModel
 
 
@@ -9,10 +10,12 @@ class SuiteCreate(BaseModel):
     description: str | None = None
     tags: list[str] = []
 
+
 class SuiteUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     tags: list[str] | None = None
+
 
 class QueryOut(BaseModel):
     id: int
@@ -22,8 +25,10 @@ class QueryOut(BaseModel):
     query_text: str
     expected_answer: str
     comments: str | None
+    metadata_: dict | None = None
 
     model_config = {"from_attributes": True}
+
 
 class SuiteOut(BaseModel):
     id: int
@@ -35,6 +40,7 @@ class SuiteOut(BaseModel):
     query_count: int = 0
 
     model_config = {"from_attributes": True}
+
 
 class SuiteDetailOut(SuiteOut):
     queries: list[QueryOut] = []
@@ -54,18 +60,22 @@ class AgentCreate(BaseModel):
     executor_type: str = "openai_agents"
     model: str
     system_prompt: str | None = None
+    source_code: str | None = None
     tools_config: dict | None = None
     model_settings: dict | None = None
     tags: list[str] = []
+
 
 class AgentUpdate(BaseModel):
     name: str | None = None
     executor_type: str | None = None
     model: str | None = None
     system_prompt: str | None = None
+    source_code: str | None = None
     tools_config: dict | None = None
     model_settings: dict | None = None
     tags: list[str] | None = None
+
 
 class AgentOut(BaseModel):
     id: int
@@ -73,6 +83,7 @@ class AgentOut(BaseModel):
     executor_type: str
     model: str
     system_prompt: str | None
+    source_code: str | None
     tools_config: dict | None
     model_settings: dict | None
     tags: list[str]
@@ -89,8 +100,79 @@ class RunCreate(BaseModel):
     tags: list[str] = []
     batch_size: int = 10
     query_ids: list[int] | None = None  # None = all queries
-    output_dir: str | None = None  # default ~/benchmark_app_data/<label>
+    output_dir: str | None = None  # default ~/axiom_data/<label>
     repeat: int = 1  # run N times
+
+
+class RunCostPreviewOut(BaseModel):
+    id: int
+    suite_id: int
+    suite_name: str = ""
+    agent_config_id: int
+    agent_name: str = ""
+    model: str
+    total_query_count: int
+    sampled_query_ids: list[int]
+    sampled_query_ordinals: list[int]
+    sample_size: int
+    repeat: int
+    estimated_total_calls: int
+    status: str = "pending"
+    error_message: str | None = None
+    pricing_version: str
+    currency: str
+    missing_model_pricing: bool
+    pricing_rates: dict = {}
+    usage_totals: dict
+    cost_breakdown: dict
+    per_query_costs: list[dict]
+    sample_cost_usd: float
+    estimated_total_cost_usd: float
+
+
+class RunCostPreviewRecordOut(BaseModel):
+    id: int
+    suite_id: int
+    suite_name: str = ""
+    agent_config_id: int
+    agent_name: str = ""
+    label: str
+    model: str
+    total_query_count: int
+    sampled_query_ids: list[int]
+    sampled_query_ordinals: list[int]
+    sample_size: int
+    repeat: int
+    estimated_total_calls: int
+    status: str = "pending"
+    error_message: str | None = None
+    pricing_version: str
+    currency: str
+    missing_model_pricing: bool
+    pricing_rates: dict = {}
+    usage_totals: dict
+    cost_breakdown: dict
+    per_query_costs: list[dict]
+    sample_cost_usd: float
+    estimated_total_cost_usd: float
+    approved_at: datetime | None
+    consumed_at: datetime | None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    created_at: datetime
+
+
+class AppNotificationOut(BaseModel):
+    id: int
+    notif_type: str
+    title: str
+    message: str
+    related_id: int | None
+    is_read: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
 
 class RunOut(BaseModel):
     id: int
@@ -112,6 +194,7 @@ class RunOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+
 class RunDetailOut(RunOut):
     suite_name: str = ""
     agent_name: str = ""
@@ -122,6 +205,7 @@ class ResultOut(BaseModel):
     id: int
     run_id: int
     query_id: int
+    trace_log_id: int | None = None
     agent_response: str | None
     tool_calls: Any = None
     reasoning: Any = None
@@ -139,6 +223,7 @@ class ResultOut(BaseModel):
 class GradeCreate(BaseModel):
     grade: str  # correct, partial, wrong
     notes: str | None = None
+
 
 class GradeOut(BaseModel):
     id: int
@@ -160,6 +245,7 @@ class GradeCountsOut(BaseModel):
     accuracy: float = 0.0
     weighted_score: float = 0.0
 
+
 class StatsOut(BaseModel):
     mean: float = 0
     median: float = 0
@@ -168,6 +254,7 @@ class StatsOut(BaseModel):
     max: float = 0
     n: int = 0
 
+
 class RunAnalyticsOut(BaseModel):
     run_id: int
     label: str
@@ -175,6 +262,10 @@ class RunAnalyticsOut(BaseModel):
     by_type: dict[str, GradeCountsOut] = {}
     performance: dict[str, StatsOut] = {}
     tool_usage: dict[str, int] = {}
+    pricing_rates: dict = {}
+    cost_summary: dict = {}
+    query_costs: list[dict] = []
+
 
 class CompareAnalyticsOut(BaseModel):
     runs: list[RunAnalyticsOut]
@@ -185,6 +276,7 @@ class CompareAnalyticsOut(BaseModel):
 class ComparisonCreate(BaseModel):
     run_ids: list[int]
     name: str | None = None
+
 
 class ComparisonOut(BaseModel):
     id: int
@@ -197,3 +289,33 @@ class ComparisonOut(BaseModel):
     updated_at: datetime
 
     model_config = {"from_attributes": True}
+
+
+# --- Tracing ---
+class TraceLogOut(BaseModel):
+    id: int
+    run_id: int | None
+    query_id: int | None
+    provider: str
+    endpoint: str
+    model: str | None
+    status: str
+    request_payload: Any = None
+    response_payload: Any = None
+    usage: Any = None
+    error: str | None
+    estimated_cost_usd: float = 0.0
+    cost_breakdown: dict = {}
+    missing_model_pricing: bool = False
+    latency_ms: int | None
+    started_at: datetime
+    completed_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class TraceSummaryOut(BaseModel):
+    count: int
+    total_cost_usd: float
+    missing_model_pricing_count: int = 0

@@ -1,6 +1,6 @@
 """Seed script: creates astro preset (suite + agent config).
 
-Usage: uv run python3 -m benchmark_app.seed
+Usage: uv run python3 -m seed
 """
 
 import asyncio
@@ -9,11 +9,10 @@ from pathlib import Path
 
 from sqlalchemy import select
 
-from benchmark_app.database import async_session
-from benchmark_app.models.suite import BenchmarkSuite
-from benchmark_app.models.query import Query
-from benchmark_app.models.agent import AgentConfig
-
+from database import async_session
+from models.agent import AgentConfig
+from models.query import Query
+from models.suite import BenchmarkSuite
 
 ASTRO_SYSTEM_PROMPT = """# Astrophysics Dataset Discovery Agent
 
@@ -63,9 +62,11 @@ ASTRO_MODEL_SETTINGS = {
 async def seed():
     async with async_session() as db:
         # Check if already seeded
-        existing = (await db.execute(
-            select(BenchmarkSuite).where(BenchmarkSuite.name == "Astro Gold v1")
-        )).scalar_one_or_none()
+        existing = (
+            await db.execute(
+                select(BenchmarkSuite).where(BenchmarkSuite.name == "Astro Gold v1")
+            )
+        ).scalar_one_or_none()
 
         if existing:
             print("Astro Gold v1 suite already exists, skipping.")
@@ -92,7 +93,9 @@ async def seed():
                             continue
                         q = Query(
                             suite_id=suite.id,
-                            ordinal=int(row[0]) if row[0].strip().isdigit() else count + 1,
+                            ordinal=int(row[0])
+                            if row[0].strip().isdigit()
+                            else count + 1,
                             tag=row[1] if len(row) > 1 else None,
                             query_text=row[2],
                             expected_answer=row[3],
@@ -106,9 +109,11 @@ async def seed():
                 print("gold_benchmark.csv not found, skipping query import")
 
         # Agent config
-        existing_agent = (await db.execute(
-            select(AgentConfig).where(AgentConfig.name == "GPT-5.2 CARE Agent")
-        )).scalar_one_or_none()
+        existing_agent = (
+            await db.execute(
+                select(AgentConfig).where(AgentConfig.name == "GPT-5.2 CARE Agent")
+            )
+        ).scalar_one_or_none()
 
         if existing_agent:
             print("GPT-5.2 CARE Agent already exists, skipping.")

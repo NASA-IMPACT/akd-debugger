@@ -45,7 +45,7 @@ export default function CompareListPage() {
           <Inbox size={40} className="mx-auto text-muted-light mb-3" />
           <p className="text-muted text-sm">
             No saved comparisons yet. Select runs from the{" "}
-            <a href="/" className="text-primary font-semibold no-underline hover:underline">History</a>
+            <a href="/" className="text-primary font-semibold no-underline hover:underline">Benchmarks</a>
             {" "}page and click &quot;Compare&quot; to create one.
           </p>
         </div>

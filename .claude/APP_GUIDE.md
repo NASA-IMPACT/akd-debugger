@@ -24,7 +24,7 @@ FastAPI web application for running, grading, and comparing LLM agent benchmarks
 ## Project Structure
 
 ```
-benchmark_app/
+axiom/
   APP_GUIDE.md           # This file
   main.py                # FastAPI app factory, lifespan, router mounting
   config.py              # Pydantic Settings (DATABASE_URL, OPENAI_API_KEY, OUTPUT_BASE_DIR)
@@ -267,8 +267,8 @@ benchmark_app/
   - Dashboard mode: cross-run accuracy, consistency, performance comparison
 
 ### Output Directory
-- Default: `~/benchmark_app_data/<label>/`
-- For grouped runs: `~/benchmark_app_data/<label>/run_N/`
+- Default: `~/axiom_data/<label>/`
+- For grouped runs: `~/axiom_data/<label>/run_N/`
 - Structure: `<output_dir>/json/<ordinal>.json`
 - JSON format matches legacy `run_0/json/` format:
   ```json
@@ -374,7 +374,7 @@ benchmark_app/
 DATABASE_URL=postgresql+asyncpg://user@localhost:5432/benchmark
 DATABASE_URL_SYNC=postgresql://user@localhost:5432/benchmark
 OPENAI_API_KEY=sk-...
-OUTPUT_BASE_DIR=~/benchmark_app_data
+OUTPUT_BASE_DIR=~/axiom_data
 ```
 
 ### Running Locally
@@ -384,10 +384,10 @@ createdb benchmark
 uv run alembic upgrade head
 
 # Seed data (optional)
-uv run python3 -m benchmark_app.seed
+uv run python3 -m seed
 
 # Start server
-uv run uvicorn benchmark_app.main:app --reload
+uv run uvicorn main:app --reload
 
 # Open http://localhost:8000
 ```

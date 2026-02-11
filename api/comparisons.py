@@ -3,10 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from benchmark_app.database import get_db
-from benchmark_app.models.comparison import Comparison, comparison_runs
-from benchmark_app.models.run import Run
-from benchmark_app.schemas.schemas import ComparisonCreate, ComparisonOut
+from database import get_db
+from models.comparison import Comparison, comparison_runs
+from models.run import Run
+from schemas.schemas import ComparisonCreate, ComparisonOut
 
 router = APIRouter()
 
@@ -42,7 +42,10 @@ async def create_comparison(body: ComparisonCreate, db: AsyncSession = Depends(g
     # Validate all runs share the same suite
     suite_ids = {r.suite_id for r in runs}
     if len(suite_ids) > 1:
-        raise HTTPException(400, "Cannot compare runs from different datasets. All runs must use the same dataset.")
+        raise HTTPException(
+            400,
+            "Cannot compare runs from different datasets. All runs must use the same dataset.",
+        )
 
     suite_id = suite_ids.pop()
 
@@ -60,13 +63,17 @@ async def create_comparison(body: ComparisonCreate, db: AsyncSession = Depends(g
 
     # Link runs
     for run in runs:
-        await db.execute(comparison_runs.insert().values(comparison_id=comp.id, run_id=run.id))
+        await db.execute(
+            comparison_runs.insert().values(comparison_id=comp.id, run_id=run.id)
+        )
 
     await db.commit()
 
     # Reload with relationships
-    stmt = select(Comparison).where(Comparison.id == comp.id).options(
-        selectinload(Comparison.suite), selectinload(Comparison.runs)
+    stmt = (
+        select(Comparison)
+        .where(Comparison.id == comp.id)
+        .options(selectinload(Comparison.suite), selectinload(Comparison.runs))
     )
     comp = (await db.execute(stmt)).scalar_one()
     return _to_out(comp)
@@ -74,17 +81,21 @@ async def create_comparison(body: ComparisonCreate, db: AsyncSession = Depends(g
 
 @router.get("", response_model=list[ComparisonOut])
 async def list_comparisons(db: AsyncSession = Depends(get_db)):
-    stmt = select(Comparison).options(
-        selectinload(Comparison.suite), selectinload(Comparison.runs)
-    ).order_by(Comparison.created_at.desc())
+    stmt = (
+        select(Comparison)
+        .options(selectinload(Comparison.suite), selectinload(Comparison.runs))
+        .order_by(Comparison.created_at.desc())
+    )
     result = await db.execute(stmt)
     return [_to_out(c) for c in result.scalars().all()]
 
 
 @router.get("/{comparison_id}", response_model=ComparisonOut)
 async def get_comparison(comparison_id: int, db: AsyncSession = Depends(get_db)):
-    stmt = select(Comparison).where(Comparison.id == comparison_id).options(
-        selectinload(Comparison.suite), selectinload(Comparison.runs)
+    stmt = (
+        select(Comparison)
+        .where(Comparison.id == comparison_id)
+        .options(selectinload(Comparison.suite), selectinload(Comparison.runs))
     )
     result = await db.execute(stmt)
     comp = result.scalar_one_or_none()

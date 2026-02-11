@@ -154,10 +154,10 @@ export default function RunDetailPage() {
   }, [run, isGroup, groupRuns, allRunIds]);
 
   const rerunMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       const queryIds = rerunQueryIds.filter((q) => q.checked).map((q) => q.id);
       if (!queryIds.length) throw new Error("Select at least one query");
-      return runsApi.create({
+      const body = {
         suite_id: run!.suite_id,
         agent_config_id: run!.agent_config_id,
         label: rerunLabel,
@@ -165,10 +165,30 @@ export default function RunDetailPage() {
         batch_size: parseInt(rerunBatch),
         repeat: parseInt(rerunRepeat) || 1,
         query_ids: queryIds,
-      });
+      };
+      const cfg = await runsApi.getConfig(runId);
+      if (cfg.agent?.executor_type === "openai_agents") {
+        const preview = await runsApi.previewCost(body);
+        if (preview.missing_model_pricing) {
+          throw new Error("Pricing missing for this model in data/openai_pricing.json");
+        }
+        const ok = window.confirm(
+          `Estimated total cost: $${preview.estimated_total_cost_usd.toFixed(6)} ${preview.currency}\n` +
+          `Sampled query ordinals: ${preview.sampled_query_ordinals.join(", ")}\n` +
+          `Approve and start rerun?`
+        );
+        if (!ok) {
+          throw new Error("Run cancelled by user");
+        }
+        return runsApi.approvePreviewAndStart(preview.id);
+      }
+      return runsApi.create(body);
     },
     onSuccess: (runs) => router.push(`/runs/${runs[0].id}`),
-    onError: (err: Error) => alert(err.message),
+    onError: (err: Error) => {
+      if (err.message === "Run cancelled by user") return;
+      alert(err.message);
+    },
   });
 
   // Close actions menu on outside click

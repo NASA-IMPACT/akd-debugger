@@ -3,7 +3,7 @@ import asyncio
 from fastapi import APIRouter
 from sse_starlette.sse import EventSourceResponse
 
-from benchmark_app.workers.sse_bus import sse_bus
+from workers.sse_bus import sse_bus
 
 router = APIRouter()
 

@@ -1,7 +1,7 @@
 import time
 from typing import Any
 
-from benchmark_app.executors.base import AgentExecutor, ExecutionResult
+from executors.base import AgentExecutor, ExecutionResult
 
 
 class OpenAIAgentsExecutor(AgentExecutor):
@@ -10,8 +10,8 @@ class OpenAIAgentsExecutor(AgentExecutor):
         return "openai_agents"
 
     async def execute(self, query: str, config: dict) -> ExecutionResult:
-        from agents import HostedMCPTool, Agent, ModelSettings, Runner, RunConfig
-        from agents.items import ToolCallItem, ReasoningItem
+        from agents import Agent, HostedMCPTool, ModelSettings, RunConfig, Runner
+        from agents.items import ReasoningItem, ToolCallItem
         from openai.types.shared.reasoning import Reasoning
 
         start = time.time()
@@ -20,13 +20,15 @@ class OpenAIAgentsExecutor(AgentExecutor):
             tools = []
             tc = config.get("tools_config")
             if tc and tc.get("type") == "mcp":
-                mcp = HostedMCPTool(tool_config={
-                    "type": "mcp",
-                    "server_label": tc.get("server_label", "MCP Server"),
-                    "allowed_tools": tc.get("allowed_tools", []),
-                    "require_approval": "never",
-                    "server_url": tc.get("server_url", ""),
-                })
+                mcp = HostedMCPTool(
+                    tool_config={
+                        "type": "mcp",
+                        "server_label": tc.get("server_label", "MCP Server"),
+                        "allowed_tools": tc.get("allowed_tools", []),
+                        "require_approval": "never",
+                        "server_url": tc.get("server_url", ""),
+                    }
+                )
                 tools = [mcp]
 
             # Build model settings
@@ -40,7 +42,9 @@ class OpenAIAgentsExecutor(AgentExecutor):
                     effort=r.get("effort", "medium"),
                     summary=r.get("summary", "auto"),
                 )
-            model_settings = ModelSettings(**ms_kwargs) if ms_kwargs else ModelSettings()
+            model_settings = (
+                ModelSettings(**ms_kwargs) if ms_kwargs else ModelSettings()
+            )
 
             agent = Agent(
                 name="Benchmark Agent",
@@ -50,14 +54,17 @@ class OpenAIAgentsExecutor(AgentExecutor):
                 model_settings=model_settings,
             )
 
-            conversation = [{
-                "role": "user",
-                "content": [{"type": "input_text", "text": query}],
-            }]
+            conversation = [
+                {
+                    "role": "user",
+                    "content": [{"type": "input_text", "text": query}],
+                }
+            ]
 
             result = await Runner.run(
-                agent, input=conversation,
-                run_config=RunConfig(trace_metadata={"__trace_source__": "benchmark_app"}),
+                agent,
+                input=conversation,
+                run_config=RunConfig(trace_metadata={"__trace_source__": "axiom"}),
             )
 
             elapsed = time.time() - start
@@ -83,11 +90,13 @@ class OpenAIAgentsExecutor(AgentExecutor):
                     r_entry = {}
                     if hasattr(raw, "summary") and raw.summary:
                         r_entry["summary"] = [
-                            s.text if hasattr(s, "text") else str(s) for s in raw.summary
+                            s.text if hasattr(s, "text") else str(s)
+                            for s in raw.summary
                         ]
                     if hasattr(raw, "content") and raw.content:
                         r_entry["content"] = [
-                            c.text if hasattr(c, "text") else str(c) for c in raw.content
+                            c.text if hasattr(c, "text") else str(c)
+                            for c in raw.content
                         ]
                     if r_entry:
                         reasoning.append(r_entry)
@@ -99,8 +108,12 @@ class OpenAIAgentsExecutor(AgentExecutor):
                 "input_tokens": usage.input_tokens,
                 "output_tokens": usage.output_tokens,
                 "total_tokens": usage.total_tokens,
-                "reasoning_tokens": usage.output_tokens_details.reasoning_tokens if usage.output_tokens_details else 0,
-                "cached_tokens": usage.input_tokens_details.cached_tokens if usage.input_tokens_details else 0,
+                "reasoning_tokens": usage.output_tokens_details.reasoning_tokens
+                if usage.output_tokens_details
+                else 0,
+                "cached_tokens": usage.input_tokens_details.cached_tokens
+                if usage.input_tokens_details
+                else 0,
             }
 
             return ExecutionResult(

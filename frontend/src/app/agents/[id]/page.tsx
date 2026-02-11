@@ -16,6 +16,15 @@ import {
   FileText, Wrench, Settings, Cpu, Cog, Calendar, Info,
   SquarePen, Eye, ClipboardPaste,
 } from "lucide-react";
+import Editor from "react-simple-code-editor";
+import hljs from "highlight.js/lib/core";
+import python from "highlight.js/lib/languages/python";
+import "highlight.js/styles/github-dark-dimmed.css";
+
+hljs.registerLanguage("python", python);
+
+const highlightPython = (code: string) =>
+  hljs.highlight(code, { language: "python" }).value;
 
 // ---------------------------------------------------------------------------
 // Types & constants
@@ -28,7 +37,7 @@ const sectionMeta: { key: SectionKey; label: string; icon: typeof FileText; edit
   { key: "prompt", label: "System Prompt", icon: FileText },
   { key: "tools", label: "Tools Config", icon: Wrench },
   { key: "settings", label: "Model Settings", icon: Settings },
-  { key: "paste", label: "Paste Code", icon: ClipboardPaste, editOnly: true },
+  { key: "paste", label: "Paste Code", icon: ClipboardPaste },
 ];
 
 const inputCls = "w-full px-3 py-2 rounded-lg text-sm outline-none transition-all bg-[var(--surface)] border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
@@ -150,6 +159,27 @@ function EmptySection({ label }: { label: string }) {
   );
 }
 
+function PasteCodeView({ agent }: { agent: AgentOut }) {
+  const highlighted = useMemo(() => {
+    if (!agent.source_code) return "";
+    return hljs.highlight(agent.source_code, { language: "python" }).value;
+  }, [agent.source_code]);
+
+  if (!agent.source_code) {
+    return <EmptySection label="No pasted code saved for this agent" />;
+  }
+  return (
+    <div className="p-6">
+      <pre className="rounded-lg border border-border max-h-[70vh] overflow-y-auto !m-0">
+        <code
+          className="hljs language-python text-xs !leading-relaxed"
+          dangerouslySetInnerHTML={{ __html: highlighted }}
+        />
+      </pre>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Edit sections
 // ---------------------------------------------------------------------------
@@ -228,18 +258,17 @@ function JsonEdit({ value, onChange, placeholder }: { value: string; onChange: (
 }
 
 function PasteCodeEdit({ form, setForm }: { form: FormState; setForm: (f: FormState) => void }) {
-  const [code, setCode] = useState("");
   const [msg, setMsg] = useState("");
   const [msgColor, setMsgColor] = useState("text-success");
   const [extracting, setExtracting] = useState(false);
 
   const extract = async () => {
-    if (!code.trim()) return;
+    if (!form.sourceCode.trim()) return;
     setExtracting(true);
     setMsg("Parsing...");
     setMsgColor("text-muted");
     try {
-      const data = await agentsApi.parseCode(code);
+      const data = await agentsApi.parseCode(form.sourceCode);
       const extracted: string[] = [];
       const updates = { ...form };
       if (data.name) { updates.name = data.name as string; extracted.push("name"); }
@@ -269,20 +298,24 @@ function PasteCodeEdit({ form, setForm }: { form: FormState; setForm: (f: FormSt
         <button
           type="button"
           onClick={extract}
-          disabled={extracting || !code.trim()}
+          disabled={extracting || !form.sourceCode.trim()}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-primary text-primary-foreground hover:brightness-110 transition-all disabled:opacity-40"
         >
           <ClipboardPaste size={12} /> {extracting ? "Extracting..." : "Extract Config"}
         </button>
         {msg && <span className={`text-xs ${msgColor}`}>{msg}</span>}
       </div>
-      <textarea
-        className="w-full flex-1 px-6 py-4 text-xs font-mono outline-none resize-none bg-transparent text-foreground placeholder:text-muted-light leading-relaxed"
-        value={code}
-        onChange={(e) => setCode(e.target.value)}
-        placeholder={"Paste your Python agent code here...\n\nagent = Agent(\n    name=\"my-agent\",\n    model=\"gpt-4o\",\n    instructions=\"You are a helpful assistant.\",\n    tools=[...],\n)"}
-        spellCheck={false}
-      />
+      <div className="flex-1 overflow-auto code-editor-wrap">
+        <Editor
+          value={form.sourceCode}
+          onValueChange={(code) => setForm({ ...form, sourceCode: code })}
+          highlight={highlightPython}
+          padding={24}
+          className="hljs min-h-full"
+          style={{ fontFamily: "var(--font-mono)", fontSize: 12, lineHeight: 1.7 }}
+          placeholder="Paste your Python agent code here..."
+        />
+      </div>
     </div>
   );
 }
@@ -297,6 +330,7 @@ interface FormState {
   model: string;
   tags: string;
   prompt: string;
+  sourceCode: string;
   tools: string;
   settings: string;
 }
@@ -308,6 +342,7 @@ function agentToForm(a: AgentOut): FormState {
     model: a.model,
     tags: (a.tags || []).join(", "),
     prompt: a.system_prompt || "",
+    sourceCode: a.source_code || "",
     tools: a.tools_config ? JSON.stringify(a.tools_config, null, 2) : "",
     settings: a.model_settings ? JSON.stringify(a.model_settings, null, 2) : "",
   };
@@ -360,6 +395,7 @@ export default function AgentDetailPage() {
         executor_type: form.executor,
         model: form.model,
         system_prompt: form.prompt || null,
+        source_code: form.sourceCode || null,
         tools_config: toolsConfig,
         model_settings: modelSettings,
         tags: form.tags.split(",").map((t) => t.trim()).filter(Boolean),
@@ -524,7 +560,7 @@ export default function AgentDetailPage() {
               </span>
               {editing && active !== "general" && (
                 <span className="text-[10px] text-muted-light">
-                  {active === "prompt" ? "Supports Markdown" : "JSON format"}
+                  {active === "prompt" ? "Supports Markdown" : active === "paste" ? "Raw source code" : "JSON format"}
                 </span>
               )}
             </div>
@@ -560,6 +596,8 @@ export default function AgentDetailPage() {
                   <PromptView agent={agent} />
                 ) : active === "tools" ? (
                   <ToolsView agent={agent} />
+                ) : active === "paste" ? (
+                  <PasteCodeView agent={agent} />
                 ) : (
                   <SettingsView agent={agent} />
                 )

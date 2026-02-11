@@ -1,15 +1,24 @@
 import csv
 import io
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
-from sqlalchemy import select, func
+import json
+
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from benchmark_app.database import get_db
-from benchmark_app.models.suite import BenchmarkSuite
-from benchmark_app.models.query import Query as QueryModel
-from benchmark_app.schemas.schemas import SuiteCreate, SuiteUpdate, SuiteOut, SuiteDetailOut, QueryCreate, QueryOut
+from database import get_db
+from models.query import Query as QueryModel
+from models.suite import BenchmarkSuite
+from schemas.schemas import (
+    QueryCreate,
+    QueryOut,
+    SuiteCreate,
+    SuiteDetailOut,
+    SuiteOut,
+    SuiteUpdate,
+)
 
 router = APIRouter()
 
@@ -24,7 +33,11 @@ async def list_suites(tag: str | None = None, db: AsyncSession = Depends(get_db)
     suites = result.scalars().all()
     out = []
     for s in suites:
-        count_stmt = select(func.count()).select_from(QueryModel).where(QueryModel.suite_id == s.id)
+        count_stmt = (
+            select(func.count())
+            .select_from(QueryModel)
+            .where(QueryModel.suite_id == s.id)
+        )
         count = (await db.execute(count_stmt)).scalar() or 0
         d = SuiteOut.model_validate(s)
         d.query_count = count
@@ -45,7 +58,11 @@ async def create_suite(body: SuiteCreate, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{suite_id}", response_model=SuiteDetailOut)
 async def get_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
-    stmt = select(BenchmarkSuite).where(BenchmarkSuite.id == suite_id).options(selectinload(BenchmarkSuite.queries))
+    stmt = (
+        select(BenchmarkSuite)
+        .where(BenchmarkSuite.id == suite_id)
+        .options(selectinload(BenchmarkSuite.queries))
+    )
     result = await db.execute(stmt)
     suite = result.scalar_one_or_none()
     if not suite:
@@ -56,7 +73,9 @@ async def get_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{suite_id}", response_model=SuiteOut)
-async def update_suite(suite_id: int, body: SuiteUpdate, db: AsyncSession = Depends(get_db)):
+async def update_suite(
+    suite_id: int, body: SuiteUpdate, db: AsyncSession = Depends(get_db)
+):
     suite = await db.get(BenchmarkSuite, suite_id)
     if not suite:
         raise HTTPException(404, "Suite not found")
@@ -64,7 +83,11 @@ async def update_suite(suite_id: int, body: SuiteUpdate, db: AsyncSession = Depe
         setattr(suite, k, v)
     await db.commit()
     await db.refresh(suite)
-    count_stmt = select(func.count()).select_from(QueryModel).where(QueryModel.suite_id == suite.id)
+    count_stmt = (
+        select(func.count())
+        .select_from(QueryModel)
+        .where(QueryModel.suite_id == suite.id)
+    )
     count = (await db.execute(count_stmt)).scalar() or 0
     d = SuiteOut.model_validate(suite)
     d.query_count = count
@@ -81,16 +104,25 @@ async def delete_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/{suite_id}/queries", response_model=QueryOut, status_code=201)
-async def add_query(suite_id: int, body: QueryCreate, db: AsyncSession = Depends(get_db)):
+async def add_query(
+    suite_id: int, body: QueryCreate, db: AsyncSession = Depends(get_db)
+):
     suite = await db.get(BenchmarkSuite, suite_id)
     if not suite:
         raise HTTPException(404, "Suite not found")
-    max_ord = (await db.execute(
-        select(func.coalesce(func.max(QueryModel.ordinal), 0)).where(QueryModel.suite_id == suite_id)
-    )).scalar()
+    max_ord = (
+        await db.execute(
+            select(func.coalesce(func.max(QueryModel.ordinal), 0)).where(
+                QueryModel.suite_id == suite_id
+            )
+        )
+    ).scalar()
     q = QueryModel(
-        suite_id=suite_id, ordinal=max_ord + 1, tag=body.tag,
-        query_text=body.query_text, expected_answer=body.expected_answer,
+        suite_id=suite_id,
+        ordinal=max_ord + 1,
+        tag=body.tag,
+        query_text=body.query_text,
+        expected_answer=body.expected_answer,
         comments=body.comments,
     )
     db.add(q)
@@ -100,7 +132,9 @@ async def add_query(suite_id: int, body: QueryCreate, db: AsyncSession = Depends
 
 
 @router.post("/{suite_id}/import-csv", response_model=dict)
-async def import_csv(suite_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)):
+async def import_csv(
+    suite_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
+):
     """Import queries from CSV. Expected columns: id, tag, query, answer, comments."""
     suite = await db.get(BenchmarkSuite, suite_id)
     if not suite:
@@ -113,7 +147,11 @@ async def import_csv(suite_id: int, file: UploadFile = File(...), db: AsyncSessi
         raise HTTPException(400, "Empty CSV")
 
     # Delete existing queries
-    existing = (await db.execute(select(QueryModel).where(QueryModel.suite_id == suite_id))).scalars().all()
+    existing = (
+        (await db.execute(select(QueryModel).where(QueryModel.suite_id == suite_id)))
+        .scalars()
+        .all()
+    )
     for q in existing:
         await db.delete(q)
 
@@ -128,6 +166,87 @@ async def import_csv(suite_id: int, file: UploadFile = File(...), db: AsyncSessi
             query_text=row[2],
             expected_answer=row[3],
             comments=row[4] if len(row) > 4 else None,
+        )
+        db.add(q)
+        count += 1
+
+    await db.commit()
+    return {"imported": count}
+
+
+@router.post("/{suite_id}/import-csv-mapped", response_model=dict)
+async def import_csv_mapped(
+    suite_id: int,
+    file: UploadFile = File(...),
+    mapping: str = Form(...),
+    db: AsyncSession = Depends(get_db),
+):
+    """Import queries from CSV with user-defined column mapping.
+
+    mapping is a JSON string: {"query_text": "col", "expected_answer": "col", "tag": "col"|null, "comments": "col"|null}
+    Unmapped columns are stored in metadata_.
+    """
+    suite = await db.get(BenchmarkSuite, suite_id)
+    if not suite:
+        raise HTTPException(404, "Suite not found")
+
+    try:
+        col_map = json.loads(mapping)
+    except json.JSONDecodeError:
+        raise HTTPException(400, "Invalid mapping JSON")
+
+    if not col_map.get("query_text") or not col_map.get("expected_answer"):
+        raise HTTPException(400, "query_text and expected_answer mappings are required")
+
+    content = (await file.read()).decode("utf-8")
+    reader = csv.DictReader(io.StringIO(content))
+    if not reader.fieldnames:
+        raise HTTPException(400, "Empty CSV or no header row")
+
+    # Validate mapped columns exist in CSV
+    for field in ("query_text", "expected_answer", "tag", "comments"):
+        csv_col = col_map.get(field)
+        if csv_col and csv_col not in reader.fieldnames:
+            raise HTTPException(400, f"Column '{csv_col}' not found in CSV")
+
+    # Delete existing queries
+    existing = (
+        (await db.execute(select(QueryModel).where(QueryModel.suite_id == suite_id)))
+        .scalars()
+        .all()
+    )
+    for q in existing:
+        await db.delete(q)
+
+    # Collect mapped column names to identify unmapped ones
+    mapped_cols = {v for v in col_map.values() if v}
+
+    count = 0
+    for row in reader:
+        query_text = row.get(col_map["query_text"], "").strip()
+        expected_answer = row.get(col_map["expected_answer"], "").strip()
+        if not query_text:
+            continue
+
+        tag = row.get(col_map["tag"], "").strip() if col_map.get("tag") else None
+        comments = (
+            row.get(col_map["comments"], "").strip() if col_map.get("comments") else None
+        )
+
+        # Collect unmapped columns into metadata
+        metadata = {}
+        for col_name, val in row.items():
+            if col_name not in mapped_cols and val and val.strip():
+                metadata[col_name] = val.strip()
+
+        q = QueryModel(
+            suite_id=suite_id,
+            ordinal=count + 1,
+            tag=tag or None,
+            query_text=query_text,
+            expected_answer=expected_answer,
+            comments=comments or None,
+            metadata_=metadata if metadata else None,
         )
         db.add(q)
         count += 1

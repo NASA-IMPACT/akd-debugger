@@ -1,12 +1,11 @@
-{% extends "base.html" %}
-{% block title %}New Run — Benchmark App{% endblock %}
+{% extends "base.html" %} {% block title %}New Run — Benchmark App{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>Start New Benchmark Run</h1>
 </div>
 
 <div class="form-card">
-    <form id="newRunForm" onsubmit="return startRun(event)">
+    <form id="newRunForm" onsubmit="return startRun(event);">
         <div class="form-group">
             <label>Dataset</label>
             <select id="suiteSelect" required class="form-control">
@@ -21,16 +20,34 @@
         </div>
         <div class="form-group">
             <label>Label</label>
-            <input type="text" id="labelInput" required class="form-control" placeholder="e.g. NC Run 3">
+            <input
+                type="text"
+                id="labelInput"
+                required
+                class="form-control"
+                placeholder="e.g. NC Run 3"
+            />
         </div>
         <div class="form-group">
             <label>Tags (comma-separated)</label>
-            <input type="text" id="tagsInput" class="form-control" placeholder="e.g. astro-team, v1">
+            <input
+                type="text"
+                id="tagsInput"
+                class="form-control"
+                placeholder="e.g. astro-team, v1"
+            />
         </div>
         <div class="form-group">
             <label>Output Directory</label>
-            <input type="text" id="outputDir" class="form-control" placeholder="~/benchmark_app_data/<label>">
-            <span class="text-muted text-sm">Leave blank for default: ~/benchmark_app_data/&lt;label&gt;</span>
+            <input
+                type="text"
+                id="outputDir"
+                class="form-control"
+                placeholder="~/axiom_data/<label>"
+            />
+            <span class="text-muted text-sm"
+                >Leave blank for default: ~/axiom_data/&lt;label&gt;</span
+            >
         </div>
         <div class="form-row">
             <div class="form-group">
@@ -44,30 +61,99 @@
             </div>
             <div class="form-group">
                 <label>Repeat</label>
-                <input type="number" id="repeatInput" class="form-control" min="1" max="10" value="1">
-                <span class="text-muted text-sm">Run the benchmark N times (max 3 in parallel)</span>
+                <input
+                    type="number"
+                    id="repeatInput"
+                    class="form-control"
+                    min="1"
+                    max="10"
+                    value="1"
+                />
+                <span class="text-muted text-sm"
+                    >Run the benchmark N times (max 3 in parallel)</span
+                >
             </div>
         </div>
         <div class="form-group">
             <label>Queries</label>
             <div class="radio-group">
-                <label><input type="radio" name="queryMode" value="all" checked onchange="toggleQuerySelect()"> All</label>
-                <label><input type="radio" name="queryMode" value="select" onchange="toggleQuerySelect()"> Select specific</label>
+                <label
+                    ><input
+                        type="radio"
+                        name="queryMode"
+                        value="all"
+                        checked
+                        onchange="toggleQuerySelect()"
+                    />
+                    All</label
+                >
+                <label
+                    ><input
+                        type="radio"
+                        name="queryMode"
+                        value="select"
+                        onchange="toggleQuerySelect()"
+                    />
+                    Select specific</label
+                >
             </div>
-            <div id="querySelectControls" style="display:none;margin-top:0.75rem">
+            <div
+                id="querySelectControls"
+                style="display: none; margin-top: 0.75rem"
+            >
                 <div class="picker-toolbar">
                     <div class="picker-row">
-                        <button type="button" class="picker-btn" onclick="selectAllQueries(true)">Select All</button>
-                        <button type="button" class="picker-btn" onclick="selectAllQueries(false)">Deselect All</button>
+                        <button
+                            type="button"
+                            class="picker-btn"
+                            onclick="selectAllQueries(true)"
+                        >
+                            Select All
+                        </button>
+                        <button
+                            type="button"
+                            class="picker-btn"
+                            onclick="selectAllQueries(false)"
+                        >
+                            Deselect All
+                        </button>
                         <span class="picker-divider"></span>
                         <div class="picker-group">
                             <label class="picker-label">Pick</label>
-                            <input type="number" id="pickN" class="picker-input" min="1" placeholder="N" oninput="onPickNChange()">
+                            <input
+                                type="number"
+                                id="pickN"
+                                class="picker-input"
+                                min="1"
+                                placeholder="N"
+                                oninput="onPickNChange()"
+                            />
                         </div>
                         <div class="picker-mode-btns" id="pickModeBtns">
-                            <button type="button" class="picker-mode-btn active" data-mode="top" onclick="setPickMode('top')">Top</button>
-                            <button type="button" class="picker-mode-btn" data-mode="bottom" onclick="setPickMode('bottom')">Bottom</button>
-                            <button type="button" class="picker-mode-btn" data-mode="random" onclick="setPickMode('random')">Random</button>
+                            <button
+                                type="button"
+                                class="picker-mode-btn active"
+                                data-mode="top"
+                                onclick="setPickMode('top')"
+                            >
+                                Top
+                            </button>
+                            <button
+                                type="button"
+                                class="picker-mode-btn"
+                                data-mode="bottom"
+                                onclick="setPickMode('bottom')"
+                            >
+                                Bottom
+                            </button>
+                            <button
+                                type="button"
+                                class="picker-mode-btn"
+                                data-mode="random"
+                                onclick="setPickMode('random')"
+                            >
+                                Random
+                            </button>
                         </div>
                     </div>
                     <div class="picker-status" id="selectionCount"></div>
@@ -83,139 +169,168 @@
 </div>
 
 <script>
-async function loadOptions() {
-    const [suites, agents] = await Promise.all([
-        fetch('/api/suites').then(r => r.json()),
-        fetch('/api/agents').then(r => r.json()),
-    ]);
-    const suiteSelect = document.getElementById('suiteSelect');
-    suites.forEach(s => {
-        const opt = document.createElement('option');
-        opt.value = s.id;
-        opt.textContent = `${s.name} (${s.query_count} queries)`;
-        suiteSelect.appendChild(opt);
-    });
-    const agentSelect = document.getElementById('agentSelect');
-    agents.forEach(a => {
-        const opt = document.createElement('option');
-        opt.value = a.id;
-        opt.textContent = `${a.name} (${a.model})`;
-        agentSelect.appendChild(opt);
-    });
-    suiteSelect.addEventListener('change', loadQueries);
-}
-let allQueries = [];
-async function loadQueries() {
-    const suiteId = document.getElementById('suiteSelect').value;
-    if (!suiteId) return;
-    const suite = await fetch(`/api/suites/${suiteId}`).then(r => r.json());
-    allQueries = suite.queries || [];
-    const grid = document.getElementById('queryGrid');
-    grid.innerHTML = '';
-    allQueries.forEach(q => {
-        const label = document.createElement('label');
-        label.className = 'query-checkbox';
-        label.innerHTML = `<input type="checkbox" name="queryIds" value="${q.id}" checked onchange="updateSelectionCount()"> Q${q.ordinal}: ${q.query_text.substring(0, 60)}...`;
-        grid.appendChild(label);
-    });
-    updateSelectionCount();
-}
-function toggleQuerySelect() {
-    const mode = document.querySelector('input[name="queryMode"]:checked').value;
-    document.getElementById('querySelectControls').style.display = mode === 'select' ? 'block' : 'none';
-}
-let currentPickMode = 'top';
-let pickDebounce = null;
+    async function loadOptions() {
+        const [suites, agents] = await Promise.all([
+            fetch("/api/suites").then((r) => r.json()),
+            fetch("/api/agents").then((r) => r.json()),
+        ]);
+        const suiteSelect = document.getElementById("suiteSelect");
+        suites.forEach((s) => {
+            const opt = document.createElement("option");
+            opt.value = s.id;
+            opt.textContent = `${s.name} (${s.query_count} queries)`;
+            suiteSelect.appendChild(opt);
+        });
+        const agentSelect = document.getElementById("agentSelect");
+        agents.forEach((a) => {
+            const opt = document.createElement("option");
+            opt.value = a.id;
+            opt.textContent = `${a.name} (${a.model})`;
+            agentSelect.appendChild(opt);
+        });
+        suiteSelect.addEventListener("change", loadQueries);
+    }
+    let allQueries = [];
+    async function loadQueries() {
+        const suiteId = document.getElementById("suiteSelect").value;
+        if (!suiteId) return;
+        const suite = await fetch(`/api/suites/${suiteId}`).then((r) =>
+            r.json(),
+        );
+        allQueries = suite.queries || [];
+        const grid = document.getElementById("queryGrid");
+        grid.innerHTML = "";
+        allQueries.forEach((q) => {
+            const label = document.createElement("label");
+            label.className = "query-checkbox";
+            label.innerHTML = `<input type="checkbox" name="queryIds" value="${q.id}" checked onchange="updateSelectionCount()"> Q${q.ordinal}: ${q.query_text.substring(0, 60)}...`;
+            grid.appendChild(label);
+        });
+        updateSelectionCount();
+    }
+    function toggleQuerySelect() {
+        const mode = document.querySelector(
+            'input[name="queryMode"]:checked',
+        ).value;
+        document.getElementById("querySelectControls").style.display =
+            mode === "select" ? "block" : "none";
+    }
+    let currentPickMode = "top";
+    let pickDebounce = null;
 
-function selectAllQueries(checked) {
-    document.querySelectorAll('input[name="queryIds"]').forEach(c => c.checked = checked);
-    document.getElementById('pickN').value = '';
-    updateSelectionCount();
-}
+    function selectAllQueries(checked) {
+        document
+            .querySelectorAll('input[name="queryIds"]')
+            .forEach((c) => (c.checked = checked));
+        document.getElementById("pickN").value = "";
+        updateSelectionCount();
+    }
 
-function setPickMode(mode) {
-    currentPickMode = mode;
-    document.querySelectorAll('.picker-mode-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
-    applyPick();
-}
+    function setPickMode(mode) {
+        currentPickMode = mode;
+        document
+            .querySelectorAll(".picker-mode-btn")
+            .forEach((b) =>
+                b.classList.toggle("active", b.dataset.mode === mode),
+            );
+        applyPick();
+    }
 
-function onPickNChange() {
-    clearTimeout(pickDebounce);
-    pickDebounce = setTimeout(applyPick, 200);
-}
+    function onPickNChange() {
+        clearTimeout(pickDebounce);
+        pickDebounce = setTimeout(applyPick, 200);
+    }
 
-function applyPick() {
-    const n = parseInt(document.getElementById('pickN').value);
-    if (!n || n < 1) return;
-    pickQueries(currentPickMode);
-}
+    function applyPick() {
+        const n = parseInt(document.getElementById("pickN").value);
+        if (!n || n < 1) return;
+        pickQueries(currentPickMode);
+    }
 
-function pickQueries(mode) {
-    const n = parseInt(document.getElementById('pickN').value);
-    if (!n || n < 1) return;
-    const boxes = [...document.querySelectorAll('input[name="queryIds"]')];
-    const total = boxes.length;
-    const count = Math.min(n, total);
+    function pickQueries(mode) {
+        const n = parseInt(document.getElementById("pickN").value);
+        if (!n || n < 1) return;
+        const boxes = [...document.querySelectorAll('input[name="queryIds"]')];
+        const total = boxes.length;
+        const count = Math.min(n, total);
 
-    boxes.forEach(c => c.checked = false);
+        boxes.forEach((c) => (c.checked = false));
 
-    if (mode === 'top') {
-        boxes.slice(0, count).forEach(c => c.checked = true);
-    } else if (mode === 'bottom') {
-        boxes.slice(-count).forEach(c => c.checked = true);
-    } else if (mode === 'random') {
-        const indices = [];
-        while (indices.length < count) {
-            const idx = Math.floor(Math.random() * total);
-            if (!indices.includes(idx)) indices.push(idx);
+        if (mode === "top") {
+            boxes.slice(0, count).forEach((c) => (c.checked = true));
+        } else if (mode === "bottom") {
+            boxes.slice(-count).forEach((c) => (c.checked = true));
+        } else if (mode === "random") {
+            const indices = [];
+            while (indices.length < count) {
+                const idx = Math.floor(Math.random() * total);
+                if (!indices.includes(idx)) indices.push(idx);
+            }
+            indices.forEach((i) => (boxes[i].checked = true));
         }
-        indices.forEach(i => boxes[i].checked = true);
+        updateSelectionCount();
     }
-    updateSelectionCount();
-}
 
-function updateSelectionCount() {
-    const checked = document.querySelectorAll('input[name="queryIds"]:checked').length;
-    const total = document.querySelectorAll('input[name="queryIds"]').length;
-    const el = document.getElementById('selectionCount');
-    if (el) el.textContent = `${checked} of ${total} selected`;
-}
-async function startRun(e) {
-    e.preventDefault();
-    const mode = document.querySelector('input[name="queryMode"]:checked').value;
-    let queryIds = null;
-    if (mode === 'select') {
-        queryIds = [...document.querySelectorAll('input[name="queryIds"]:checked')].map(c => parseInt(c.value));
-        if (queryIds.length === 0) { alert('Select at least one query'); return false; }
+    function updateSelectionCount() {
+        const checked = document.querySelectorAll(
+            'input[name="queryIds"]:checked',
+        ).length;
+        const total = document.querySelectorAll(
+            'input[name="queryIds"]',
+        ).length;
+        const el = document.getElementById("selectionCount");
+        if (el) el.textContent = `${checked} of ${total} selected`;
     }
-    const tags = document.getElementById('tagsInput').value.split(',').map(t => t.trim()).filter(Boolean);
-    const outputDir = document.getElementById('outputDir').value.trim();
-    const repeat = parseInt(document.getElementById('repeatInput').value) || 1;
-    const body = {
-        suite_id: parseInt(document.getElementById('suiteSelect').value),
-        agent_config_id: parseInt(document.getElementById('agentSelect').value),
-        label: document.getElementById('labelInput').value,
-        tags: tags,
-        batch_size: parseInt(document.getElementById('batchSelect').value),
-        repeat: repeat,
-    };
-    if (outputDir) body.output_dir = outputDir;
-    if (queryIds) body.query_ids = queryIds;
-    const resp = await fetch('/api/runs', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify(body),
-    });
-    if (resp.ok) {
-        const runs = await resp.json();
-        // Navigate to the first run (it will detect the group)
-        window.location = `/runs/${runs[0].id}`;
-    } else {
-        const err = await resp.json();
-        alert(err.detail || 'Error creating run');
+    async function startRun(e) {
+        e.preventDefault();
+        const mode = document.querySelector(
+            'input[name="queryMode"]:checked',
+        ).value;
+        let queryIds = null;
+        if (mode === "select") {
+            queryIds = [
+                ...document.querySelectorAll('input[name="queryIds"]:checked'),
+            ].map((c) => parseInt(c.value));
+            if (queryIds.length === 0) {
+                alert("Select at least one query");
+                return false;
+            }
+        }
+        const tags = document
+            .getElementById("tagsInput")
+            .value.split(",")
+            .map((t) => t.trim())
+            .filter(Boolean);
+        const outputDir = document.getElementById("outputDir").value.trim();
+        const repeat =
+            parseInt(document.getElementById("repeatInput").value) || 1;
+        const body = {
+            suite_id: parseInt(document.getElementById("suiteSelect").value),
+            agent_config_id: parseInt(
+                document.getElementById("agentSelect").value,
+            ),
+            label: document.getElementById("labelInput").value,
+            tags: tags,
+            batch_size: parseInt(document.getElementById("batchSelect").value),
+            repeat: repeat,
+        };
+        if (outputDir) body.output_dir = outputDir;
+        if (queryIds) body.query_ids = queryIds;
+        const resp = await fetch("/api/runs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+        });
+        if (resp.ok) {
+            const runs = await resp.json();
+            // Navigate to the first run (it will detect the group)
+            window.location = `/runs/${runs[0].id}`;
+        } else {
+            const err = await resp.json();
+            alert(err.detail || "Error creating run");
+        }
+        return false;
     }
-    return false;
-}
-loadOptions();
+    loadOptions();
 </script>
 {% endblock %}

@@ -1,0 +1,7 @@
+prompt,golden_answer,category,difficulty,source,notes
+"What is a black hole?","A region of spacetime where gravity is so strong that nothing can escape",cosmology,hard,textbook,basic concept
+"What is a neutron star?","A collapsed core of a massive star, composed almost entirely of neutrons,compact_objects,medium,lecture notes,missing closing quote
+"Explain redshift.""Extra quote here","The increase in wavelength of light from receding objects",cosmology,easy,Hubble 1929,foundational
+"What is dark matter?"
+"How old is the universe?","13.8 billion years",cosmology,"medium,Planck data,this row has a quote that swallows commas
+What causes a supernova?,The explosive death of a star,"stellar_evolution,hard,textbook,"unclosed quote at end

@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -18,7 +18,7 @@ services:
   app:
     build:
       context: ..
-      dockerfile: benchmark_app/Dockerfile
+      dockerfile: axiom/Dockerfile
     ports:
       - "8000:8000"
     environment:
@@ -28,7 +28,7 @@ services:
       db:
         condition: service_healthy
     command: >
-      sh -c "uv run alembic upgrade head && uv run uvicorn benchmark_app.main:app --host 0.0.0.0 --port 8000"
+      sh -c "uv run alembic upgrade head && uv run uvicorn main:app --host 0.0.0.0 --port 8000"
 
 volumes:
   pgdata:

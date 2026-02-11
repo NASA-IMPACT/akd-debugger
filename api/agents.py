@@ -6,9 +6,9 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from benchmark_app.database import get_db
-from benchmark_app.models.agent import AgentConfig
-from benchmark_app.schemas.schemas import AgentCreate, AgentUpdate, AgentOut
+from database import get_db
+from models.agent import AgentConfig
+from schemas.schemas import AgentCreate, AgentOut, AgentUpdate
 
 router = APIRouter()
 
@@ -16,6 +16,7 @@ router = APIRouter()
 # ---------------------------------------------------------------------------
 # AST-based Python agent code parser
 # ---------------------------------------------------------------------------
+
 
 class ParseCodeRequest(BaseModel):
     code: str
@@ -28,7 +29,9 @@ def _eval_literal(node):
     if isinstance(node, ast.List):
         return [_eval_literal(el) for el in node.elts]
     if isinstance(node, ast.Dict):
-        return {_eval_literal(k): _eval_literal(v) for k, v in zip(node.keys, node.values)}
+        return {
+            _eval_literal(k): _eval_literal(v) for k, v in zip(node.keys, node.values)
+        }
     if isinstance(node, ast.Name):
         if node.id == "True":
             return True
@@ -39,7 +42,11 @@ def _eval_literal(node):
         return f"<var:{node.id}>"
     if isinstance(node, ast.Attribute):
         # e.g. SomeEnum.value — return as string
-        return f"{_eval_literal(node.value)}.{node.attr}" if isinstance(node.value, ast.Name) else str(ast.dump(node))
+        return (
+            f"{_eval_literal(node.value)}.{node.attr}"
+            if isinstance(node.value, ast.Name)
+            else str(ast.dump(node))
+        )
     if isinstance(node, ast.Call):
         # Handle Reasoning(effort="medium", summary="auto") etc.
         result = {}
@@ -173,7 +180,9 @@ async def get_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
 
 
 @router.put("/{agent_id}", response_model=AgentOut)
-async def update_agent(agent_id: int, body: AgentUpdate, db: AsyncSession = Depends(get_db)):
+async def update_agent(
+    agent_id: int, body: AgentUpdate, db: AsyncSession = Depends(get_db)
+):
     agent = await db.get(AgentConfig, agent_id)
     if not agent:
         raise HTTPException(404, "Agent not found")

@@ -3,10 +3,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from benchmark_app.database import get_db
-from benchmark_app.models.result import Result
-from benchmark_app.models.grade import Grade
-from benchmark_app.schemas.schemas import ResultOut
+from database import get_db
+from models.grade import Grade
+from models.result import Result
+from schemas.schemas import ResultOut
 
 router = APIRouter()
 

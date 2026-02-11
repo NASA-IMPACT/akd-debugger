@@ -13,9 +13,22 @@ from loguru import logger
 logger.remove()
 logger.add(sys.stderr, level="INFO")
 
-from benchmark_app.config import get_settings
-from benchmark_app.api import suites, agents, runs, results, grades, analytics, export, sse, browse, comparisons
-from benchmark_app.pages import views
+from api import (
+    agents,
+    analytics,
+    browse,
+    comparisons,
+    export,
+    grades,
+    notifications,
+    results,
+    runs,
+    sse,
+    suites,
+    traces,
+)
+from config import get_settings
+from pages import views
 
 settings = get_settings()
 
@@ -31,7 +44,8 @@ async def lifespan(app: FastAPI):
     # Startup
     yield
     # Shutdown — clean up SSE bus
-    from benchmark_app.workers.sse_bus import sse_bus
+    from workers.sse_bus import sse_bus
+
     sse_bus.clear()
 
 
@@ -62,6 +76,8 @@ app.include_router(export.router, prefix="/api/export", tags=["export"])
 app.include_router(sse.router, prefix="/api", tags=["sse"])
 app.include_router(browse.router, prefix="/api/browse", tags=["browse"])
 app.include_router(comparisons.router, prefix="/api/comparisons", tags=["comparisons"])
+app.include_router(traces.router, prefix="/api/traces", tags=["traces"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 
 # Page routes
 app.include_router(views.router)

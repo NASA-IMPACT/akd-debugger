@@ -1,14 +1,17 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/benchmark"
+    DATABASE_URL: str = (
+        "postgresql+asyncpg://postgres:postgres@localhost:5432/benchmark"
+    )
     DATABASE_URL_SYNC: str = "postgresql://postgres:postgres@localhost:5432/benchmark"
     APP_TITLE: str = "Benchmark App"
     DEBUG: bool = False
     OPENAI_API_KEY: str = ""
-    OUTPUT_BASE_DIR: str = "~/benchmark_app_data"
+    OUTPUT_BASE_DIR: str = "~/axiom_data"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

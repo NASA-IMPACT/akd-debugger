@@ -4,10 +4,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from benchmark_app.models.run import Run
-from benchmark_app.models.result import Result
-from benchmark_app.models.query import Query
-from benchmark_app.services.analytics import compute_run_analytics, compute_compare_analytics
+from models.query import Query
+from models.result import Result
+from models.run import Run
+from services.analytics import compute_compare_analytics, compute_run_analytics
 
 
 async def generate_export_html(run_ids: list[int], db: AsyncSession) -> str:
@@ -19,33 +19,43 @@ async def generate_export_html(run_ids: list[int], db: AsyncSession) -> str:
         if not run:
             continue
 
-        results = (await db.execute(
-            select(Result)
-            .where(Result.run_id == rid)
-            .options(selectinload(Result.grade), selectinload(Result.query))
-            .order_by(Result.query_id)
-        )).scalars().all()
+        results = (
+            (
+                await db.execute(
+                    select(Result)
+                    .where(Result.run_id == rid)
+                    .options(selectinload(Result.grade), selectinload(Result.query))
+                    .order_by(Result.query_id)
+                )
+            )
+            .scalars()
+            .all()
+        )
 
         run_results = []
         for r in results:
-            run_results.append({
-                "id": str(r.query_id),
-                "query": r.query.query_text,
-                "tag": r.query.tag or "",
-                "expected_answer": r.query.expected_answer,
-                "comments": r.query.comments or "",
-                "agent_response": r.agent_response or "",
-                "tool_calls": r.tool_calls or [],
-                "usage": r.usage or {},
-                "execution_time_seconds": r.execution_time_seconds,
-                "grade": r.grade.grade if r.grade else "not_graded",
-            })
+            run_results.append(
+                {
+                    "id": str(r.query_id),
+                    "query": r.query.query_text,
+                    "tag": r.query.tag or "",
+                    "expected_answer": r.query.expected_answer,
+                    "comments": r.query.comments or "",
+                    "agent_response": r.agent_response or "",
+                    "tool_calls": r.tool_calls or [],
+                    "usage": r.usage or {},
+                    "execution_time_seconds": r.execution_time_seconds,
+                    "grade": r.grade.grade if r.grade else "not_graded",
+                }
+            )
 
-        runs_data.append({
-            "id": run.id,
-            "label": run.label,
-            "results": run_results,
-        })
+        runs_data.append(
+            {
+                "id": run.id,
+                "label": run.label,
+                "results": run_results,
+            }
+        )
 
     # Analytics
     if len(run_ids) == 1:
@@ -55,10 +65,16 @@ async def generate_export_html(run_ids: list[int], db: AsyncSession) -> str:
         analytics = await compute_compare_analytics(run_ids, db)
         analytics_data = analytics.model_dump()
 
-    data_json = json.dumps(runs_data, ensure_ascii=False).replace("</script>", "<\\/script>")
-    analytics_json = json.dumps(analytics_data, ensure_ascii=False).replace("</script>", "<\\/script>")
+    data_json = json.dumps(runs_data, ensure_ascii=False).replace(
+        "</script>", "<\\/script>"
+    )
+    analytics_json = json.dumps(analytics_data, ensure_ascii=False).replace(
+        "</script>", "<\\/script>"
+    )
 
-    return _EXPORT_TEMPLATE.replace("__RUNS_JSON__", data_json).replace("__ANALYTICS_JSON__", analytics_json)
+    return _EXPORT_TEMPLATE.replace("__RUNS_JSON__", data_json).replace(
+        "__ANALYTICS_JSON__", analytics_json
+    )
 
 
 _EXPORT_TEMPLATE = r"""<!DOCTYPE html>
