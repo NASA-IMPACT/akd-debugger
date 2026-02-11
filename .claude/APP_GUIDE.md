@@ -115,11 +115,10 @@ benchmark_app/
 | id | SERIAL PK | |
 | suite_id | FK -> benchmark_suites | CASCADE delete |
 | ordinal | INT | display order |
-| query_type | VARCHAR(100) | e.g. "archive_driven" |
+| tag | VARCHAR(100) | e.g. "archive_driven" |
 | query_text | TEXT | the benchmark question |
 | expected_answer | TEXT | ground truth |
 | comments | TEXT | nullable |
-| function_status | VARCHAR(50) | nullable |
 | metadata | JSONB | nullable, extra data |
 
 ### agent_configs
@@ -304,7 +303,7 @@ benchmark_app/
 
 ### Analytics
 - Grade counts + accuracy + weighted score
-- Breakdown by query_type
+- Breakdown by tag
 - Performance stats: mean, median, std, min, max for time/tokens/tools/reasoning
 - Tool usage counters
 - Cross-run consistency analysis (all_correct, all_wrong, inconsistent)
