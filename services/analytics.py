@@ -233,6 +233,10 @@ async def compute_compare_analytics(
             response_map.setdefault(r.query_id, {})[rid] = {
                 "agent_response": r.agent_response,
                 "error": r.error,
+                "tool_calls": r.tool_calls,
+                "reasoning": r.reasoning,
+                "usage": r.usage,
+                "execution_time_seconds": r.execution_time_seconds,
             }
             result_id_map.setdefault(r.query_id, {})[rid] = r.id
             if r.query and r.query_id not in query_meta:

@@ -37,6 +37,7 @@ export function CompareCard({ queryId, query, runs, resultsByRun, onGrade, onOpe
   const [activeTab, setActiveTab] = useState(0);
   const [tabsMinimized, setTabsMinimized] = useState(false);
   const [splitCompare, setSplitCompare] = useState<{ left: number; right: number } | null>(null);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const handleTabClick = useCallback((e: React.MouseEvent, idx: number) => {
     if (e.shiftKey && runs.length > 1 && idx !== activeTab) {
@@ -45,6 +46,11 @@ export function CompareCard({ queryId, query, runs, resultsByRun, onGrade, onOpe
       setActiveTab(idx);
     }
   }, [activeTab, runs.length]);
+
+  // Scroll active tab button into view when it changes
+  useEffect(() => {
+    tabRefs.current[activeTab]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [activeTab]);
 
   // Tab / Shift+Tab to cycle agent tabs when this card is active
   useEffect(() => {
@@ -136,6 +142,7 @@ export function CompareCard({ queryId, query, runs, resultsByRun, onGrade, onOpe
             return (
               <button
                 key={run.id}
+                ref={(el) => { tabRefs.current[idx] = el; }}
                 className={cn(
                   "px-4 py-2.5 font-semibold text-sm text-muted border-b-[3px] border-transparent -mb-[2px] whitespace-nowrap transition-colors",
                   idx === activeTab

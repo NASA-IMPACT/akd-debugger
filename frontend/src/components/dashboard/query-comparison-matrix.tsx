@@ -1,12 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { RunAnalyticsOut, QueryGradeRow, GradeValue } from "@/lib/types";
 import { gradesApi } from "@/lib/api/grades";
 import { GradeButton } from "@/components/grading/grade-button";
+import { ReasoningDisplay } from "@/components/grading/reasoning-display";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
+import { ToolPills } from "@/components/tool-calls/tool-pills";
+import { ToolModal } from "@/components/tool-calls/tool-modal";
+import { countByKind } from "@/lib/tool-call-utils";
 import { cn } from "@/lib/utils";
+import type { ToolCall, ReasoningStep } from "@/lib/types";
 
 type Filter = "all" | "disagreements";
 
@@ -115,13 +120,13 @@ export function QueryComparisonMatrix({ runs, queryGrades }: Props) {
           </span>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-auto max-h-[70vh]">
           <table className="w-full text-sm">
-            <thead>
+            <thead className="sticky top-0 z-10">
               <tr>
-                <th className="text-left p-2 bg-[var(--surface)] font-semibold min-w-[220px]">Query</th>
+                <th className="text-left p-2 bg-card font-semibold min-w-[220px]">Query</th>
                 {runs.map((r) => (
-                  <th key={r.run_id} className="text-center p-2 bg-[var(--surface)] font-semibold whitespace-nowrap">
+                  <th key={r.run_id} className="text-center p-2 bg-card font-semibold whitespace-nowrap">
                     {r.label}
                   </th>
                 ))}
@@ -207,6 +212,231 @@ export function QueryComparisonMatrix({ runs, queryGrades }: Props) {
   );
 }
 
+const dotColors: Record<string, string> = {
+  correct: "bg-green-500",
+  partial: "bg-yellow-400",
+  wrong: "bg-red-500",
+  not_graded: "bg-muted-light",
+};
+
+function RunPanel({
+  run,
+  row,
+  editMode,
+  setEditMode,
+  onGrade,
+  gradePending,
+  onOpenToolModal,
+}: {
+  run: RunAnalyticsOut;
+  row: QueryGradeRow;
+  editMode: boolean;
+  setEditMode: (v: boolean) => void;
+  onGrade: (runId: number, grade: GradeValue) => void;
+  gradePending: boolean;
+  onOpenToolModal?: (toolCalls: ToolCall[], idx: number, runLabel: string) => void;
+}) {
+  const payload = row.responses?.[run.run_id];
+  const activeGrade = row.grades[run.run_id] as GradeValue | undefined;
+  const canGrade = Boolean(row.result_ids?.[run.run_id]);
+  const tokens = payload?.usage?.total_tokens ? payload.usage.total_tokens.toLocaleString() : "N/A";
+  const time = payload?.execution_time_seconds ? payload.execution_time_seconds.toFixed(1) + "s" : "N/A";
+  const counts = countByKind(payload?.tool_calls as ToolCall[] | undefined);
+
+  return (
+    <div className="p-4 bg-[var(--surface)] border border-border rounded-b-lg">
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-sm font-semibold text-muted">Agent Response</span>
+        <label
+          className={cn(
+            "inline-flex items-center gap-2 text-xs",
+            canGrade ? "text-foreground" : "text-muted"
+          )}
+          title={canGrade ? "Toggle grade controls" : "No result found for this run"}
+        >
+          <span>Edit grades</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={editMode}
+            onClick={() => canGrade && setEditMode(!editMode)}
+            disabled={!canGrade}
+            className={cn(
+              "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+              editMode ? "bg-brand" : "bg-border",
+              !canGrade && "opacity-50 cursor-not-allowed"
+            )}
+          >
+            <span
+              className={cn(
+                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                editMode ? "translate-x-4" : "translate-x-0.5"
+              )}
+            />
+          </button>
+        </label>
+      </div>
+
+      {editMode && canGrade && (
+        <div className="flex gap-2 mb-3">
+          {(["correct", "partial", "wrong"] as GradeValue[]).map((g) => (
+            <GradeButton
+              key={g}
+              grade={g}
+              active={activeGrade === g}
+              onClick={() => onGrade(run.run_id, g)}
+            />
+          ))}
+          {gradePending && <span className="text-xs text-muted self-center">Saving...</span>}
+        </div>
+      )}
+
+      {payload?.error ? (
+        <div className="text-destructive font-semibold mb-3">ERROR: {payload.error}</div>
+      ) : null}
+      <div className="bg-card border-2 border-border rounded-lg p-4 max-h-[360px] overflow-y-auto whitespace-pre-wrap text-sm">
+        <MarkdownRenderer content={payload?.agent_response || "N/A"} />
+      </div>
+
+      {/* Stats */}
+      <div className="mt-3 pt-3 border-t border-border text-sm text-muted flex gap-6 flex-wrap">
+        <span><strong>Time:</strong> {time}</span>
+        <span><strong>Tokens:</strong> {tokens}</span>
+        {counts.tools > 0 && <span><strong>Tool Calls:</strong> {counts.tools}</span>}
+        {counts.searches > 0 && <span><strong>Web Searches:</strong> {counts.searches}</span>}
+        {counts.tools === 0 && counts.searches === 0 && <span><strong>Tool Calls:</strong> 0</span>}
+      </div>
+
+      {/* Tool pills */}
+      <ToolPills
+        toolCalls={(payload?.tool_calls as ToolCall[] | undefined) ?? null}
+        onClickTool={(i) => onOpenToolModal?.(payload?.tool_calls as ToolCall[], i, run.label)}
+      />
+
+      {/* Reasoning */}
+      <ReasoningDisplay reasoning={(payload?.reasoning as ReasoningStep[] | undefined) ?? null} />
+    </div>
+  );
+}
+
+function AgentDropdown({
+  runs,
+  row,
+  selectedIdx,
+  onChange,
+}: {
+  runs: RunAnalyticsOut[];
+  row: QueryGradeRow;
+  selectedIdx: number;
+  onChange: (idx: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handleClick = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  const selectedRun = runs[selectedIdx];
+  const selectedGrade = selectedRun ? (row.grades[selectedRun.run_id] || "not_graded") : "not_graded";
+
+  return (
+    <div ref={ref} className="relative mb-3">
+      <button
+        type="button"
+        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-[var(--surface)] text-sm font-semibold hover:bg-[var(--surface-hover)] transition-colors"
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColors[selectedGrade])} />
+        <span className="truncate flex-1 text-left">{selectedRun?.label}</span>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={cn("shrink-0 transition-transform", open && "rotate-180")}>
+          <path d="M3 4.5l3 3 3-3" />
+        </svg>
+      </button>
+      {open && (
+        <div className="absolute z-10 mt-1 w-full bg-card border border-border rounded-lg shadow-lg py-1 max-h-60 overflow-y-auto">
+          {runs.map((run, idx) => {
+            const grade = row.grades[run.run_id] || "not_graded";
+            return (
+              <button
+                key={run.run_id}
+                type="button"
+                className={cn(
+                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-[var(--surface-hover)] transition-colors",
+                  idx === selectedIdx && "bg-[var(--surface)] font-bold"
+                )}
+                onClick={() => { onChange(idx); setOpen(false); }}
+              >
+                <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColors[grade])} />
+                <span className="truncate">{run.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SplitPanel({
+  row,
+  runs,
+  initialLeft,
+  initialRight,
+  editMode,
+  setEditMode,
+  onGrade,
+  gradePending,
+  onOpenToolModal,
+}: {
+  row: QueryGradeRow;
+  runs: RunAnalyticsOut[];
+  initialLeft: number;
+  initialRight: number;
+  editMode: boolean;
+  setEditMode: (v: boolean) => void;
+  onGrade: (runId: number, grade: GradeValue) => void;
+  gradePending: boolean;
+  onOpenToolModal?: (toolCalls: ToolCall[], idx: number, runLabel: string) => void;
+}) {
+  const [leftIdx, setLeftIdx] = useState(initialLeft);
+  const [rightIdx, setRightIdx] = useState(initialRight);
+
+  return (
+    <div className="flex divide-x divide-border border border-border rounded-b-lg bg-[var(--surface)]">
+      <div className="flex-1 p-4 min-w-0">
+        <AgentDropdown runs={runs} row={row} selectedIdx={leftIdx} onChange={setLeftIdx} />
+        <RunPanel
+          run={runs[leftIdx]}
+          row={row}
+          editMode={editMode}
+          setEditMode={setEditMode}
+          onGrade={onGrade}
+          gradePending={gradePending}
+          onOpenToolModal={onOpenToolModal}
+        />
+      </div>
+      <div className="flex-1 p-4 min-w-0">
+        <AgentDropdown runs={runs} row={row} selectedIdx={rightIdx} onChange={setRightIdx} />
+        <RunPanel
+          run={runs[rightIdx]}
+          row={row}
+          editMode={editMode}
+          setEditMode={setEditMode}
+          onGrade={onGrade}
+          gradePending={gradePending}
+          onOpenToolModal={onOpenToolModal}
+        />
+      </div>
+    </div>
+  );
+}
+
 function QueryCompareModal({
   row,
   runs,
@@ -224,11 +454,34 @@ function QueryCompareModal({
 }) {
   const [activeTab, setActiveTab] = useState(0);
   const [editMode, setEditMode] = useState(false);
+  const [splitView, setSplitView] = useState<{ left: number; right: number } | null>(null);
+  const [toolModal, setToolModal] = useState<{ toolCalls: ToolCall[]; idx: number; runLabel: string } | null>(null);
+  const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+
+  const handleOpenToolModal = (toolCalls: ToolCall[], idx: number, runLabel: string) => {
+    setToolModal({ toolCalls, idx, runLabel });
+  };
 
   // Reset tab when navigating to a different query
   useEffect(() => {
     setActiveTab(0);
+    setSplitView(null);
+    setToolModal(null);
   }, [row.query_id]);
+
+  // Scroll active tab into view
+  useEffect(() => {
+    tabRefs.current[activeTab]?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+  }, [activeTab]);
+
+  const handleTabClick = (e: React.MouseEvent, idx: number) => {
+    if (e.shiftKey && runs.length > 1 && idx !== activeTab) {
+      setSplitView({ left: activeTab, right: idx });
+    } else {
+      setActiveTab(idx);
+      setSplitView(null);
+    }
+  };
 
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
@@ -256,7 +509,7 @@ function QueryCompareModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="bg-card rounded-xl w-[95%] max-w-[1100px] h-[82vh] overflow-hidden flex flex-col shadow-2xl">
+      <div className="bg-card rounded-xl w-[95%] max-w-[1400px] h-[85vh] overflow-hidden flex flex-col shadow-2xl">
         <div className="flex justify-between items-center p-6 pb-0">
           <h3 className="text-xl font-semibold">Query #{row.ordinal}</h3>
           <button className="text-2xl text-muted hover:text-foreground" onClick={onClose}>
@@ -279,20 +532,21 @@ function QueryCompareModal({
             )}
           </div>
 
-          <div className="flex bg-[var(--surface-hover)] border-b-2 border-border rounded-t-lg overflow-x-auto">
+          <div className="flex bg-[var(--surface-hover)] border-b-2 border-border rounded-t-lg overflow-x-auto scrollbar-thin">
             {runs.map((run, idx) => {
               const grade = row.grades[run.run_id] || "";
               const badge = grade ? gradeBadge[grade] : null;
               return (
                 <button
                   key={run.run_id}
+                  ref={(el) => { tabRefs.current[idx] = el; }}
                   className={cn(
-                    "px-4 py-2.5 font-semibold text-sm text-muted border-b-[3px] border-transparent -mb-[2px] whitespace-nowrap transition-colors",
+                    "px-4 py-2.5 font-semibold text-sm text-muted border-b-[3px] border-transparent -mb-[2px] whitespace-nowrap transition-colors flex-shrink-0",
                     idx === activeTab
                       ? "text-foreground bg-card border-b-brand"
                       : "hover:bg-[var(--surface)] hover:text-foreground"
                   )}
-                  onClick={() => setActiveTab(idx)}
+                  onClick={(e) => handleTabClick(e, idx)}
                 >
                   {run.label}
                   {badge && (
@@ -305,70 +559,46 @@ function QueryCompareModal({
             })}
           </div>
 
-          {runs.map((run, idx) => {
-            if (idx !== activeTab) return null;
-            const payload = row.responses?.[run.run_id];
-            const activeGrade = row.grades[run.run_id] as GradeValue | undefined;
-            const canGrade = Boolean(row.result_ids?.[run.run_id]);
-
-            return (
-              <div key={run.run_id} className="p-4 bg-[var(--surface)] border border-border rounded-b-lg">
-                <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-semibold text-muted">Agent Response</span>
-                  <label
-                    className={cn(
-                      "inline-flex items-center gap-2 text-xs",
-                      canGrade ? "text-foreground" : "text-muted"
-                    )}
-                    title={canGrade ? "Toggle grade controls" : "No result found for this run"}
-                  >
-                    <span>Edit grades</span>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={editMode}
-                      onClick={() => canGrade && setEditMode((v) => !v)}
-                      disabled={!canGrade}
-                      className={cn(
-                        "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-                        editMode ? "bg-brand" : "bg-border",
-                        !canGrade && "opacity-50 cursor-not-allowed"
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                          editMode ? "translate-x-4" : "translate-x-0.5"
-                        )}
-                      />
-                    </button>
-                  </label>
-                </div>
-
-                {editMode && canGrade && (
-                  <div className="flex gap-2 mb-3">
-                    {(["correct", "partial", "wrong"] as GradeValue[]).map((g) => (
-                      <GradeButton
-                        key={g}
-                        grade={g}
-                        active={activeGrade === g}
-                        onClick={() => onGrade(run.run_id, g)}
-                      />
-                    ))}
-                    {gradePending && <span className="text-xs text-muted self-center">Saving...</span>}
-                  </div>
-                )}
-
-                {payload?.error ? (
-                  <div className="text-destructive font-semibold mb-3">ERROR: {payload.error}</div>
-                ) : null}
-                <div className="bg-card border-2 border-border rounded-lg p-4 max-h-[360px] overflow-y-auto whitespace-pre-wrap text-sm">
-                  <MarkdownRenderer content={payload?.agent_response || "N/A"} />
-                </div>
-              </div>
-            );
-          })}
+          {splitView ? (
+            <SplitPanel
+              row={row}
+              runs={runs}
+              initialLeft={splitView.left}
+              initialRight={splitView.right}
+              editMode={editMode}
+              setEditMode={setEditMode}
+              onGrade={onGrade}
+              gradePending={gradePending}
+              onOpenToolModal={handleOpenToolModal}
+            />
+          ) : (
+            runs.map((run, idx) => {
+              if (idx !== activeTab) return null;
+              return (
+                <RunPanel
+                  key={run.run_id}
+                  run={run}
+                  row={row}
+                  editMode={editMode}
+                  setEditMode={setEditMode}
+                  onGrade={onGrade}
+                  gradePending={gradePending}
+                  onOpenToolModal={handleOpenToolModal}
+                />
+              );
+            })
+          )}
         </div>
+
+        {toolModal && (
+          <ToolModal
+            toolCalls={toolModal.toolCalls}
+            initialIdx={toolModal.idx}
+            queryLabel={`Q${row.ordinal}`}
+            runLabel={toolModal.runLabel}
+            onClose={() => setToolModal(null)}
+          />
+        )}
       </div>
     </div>
   );
