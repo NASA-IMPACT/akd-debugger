@@ -13,6 +13,7 @@ import { ToolModal } from "@/components/tool-calls/tool-modal";
 import { countByKind } from "@/lib/tool-call-utils";
 import { cn } from "@/lib/utils";
 import type { ToolCall, ReasoningStep } from "@/lib/types";
+import { TraceComparePanel } from "@/components/tool-calls/trace-compare-panel";
 import { RotateCcw } from "lucide-react";
 
 type Filter = "all" | "disagreements";
@@ -467,6 +468,8 @@ function AgentDropdown({
   );
 }
 
+type SplitViewMode = "responses" | "traces";
+
 function SplitPanel({
   row,
   runs,
@@ -500,43 +503,103 @@ function SplitPanel({
 }) {
   const [leftIdx, setLeftIdx] = useState(initialLeft);
   const [rightIdx, setRightIdx] = useState(initialRight);
+  const [viewMode, setViewMode] = useState<SplitViewMode>("responses");
+
+  const leftRun = runs[leftIdx];
+  const rightRun = runs[rightIdx];
+  const leftPayload = leftRun ? row.responses?.[leftRun.run_id] : undefined;
+  const rightPayload = rightRun ? row.responses?.[rightRun.run_id] : undefined;
 
   return (
-    <div className="flex divide-x divide-border border border-border rounded-b-lg bg-[var(--surface)]">
-      <div className="flex-1 p-4 min-w-0">
-        <AgentDropdown runs={runs} row={row} selectedIdx={leftIdx} onChange={setLeftIdx} />
-        <RunPanel
-          run={runs[leftIdx]}
-          row={row}
-          editMode={editMode}
-          setEditMode={setEditMode}
-          onGrade={onGrade}
-          gradePending={gradePending}
-          onOpenToolModal={onOpenToolModal}
-          onRetry={onRetry}
-          isRetrying={isRetrying}
-          versionsByResultId={versionsByResultId}
-          onAcceptVersion={onAcceptVersion}
-          onIgnoreVersion={onIgnoreVersion}
-        />
+    <div className="border border-border rounded-b-lg bg-[var(--surface)] flex flex-col">
+      {/* Toggle bar */}
+      <div className="flex items-center gap-2 px-4 py-2 border-b border-border">
+        <div className="flex gap-0.5 bg-[var(--surface-hover)] border border-border rounded-md p-0.5">
+          <button
+            type="button"
+            className={cn(
+              "px-3 py-1 rounded text-xs font-semibold transition-colors",
+              viewMode === "responses" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground"
+            )}
+            onClick={() => setViewMode("responses")}
+          >
+            Responses
+          </button>
+          <button
+            type="button"
+            className={cn(
+              "px-3 py-1 rounded text-xs font-semibold transition-colors",
+              viewMode === "traces" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground"
+            )}
+            onClick={() => setViewMode("traces")}
+          >
+            Traces
+          </button>
+        </div>
       </div>
-      <div className="flex-1 p-4 min-w-0">
-        <AgentDropdown runs={runs} row={row} selectedIdx={rightIdx} onChange={setRightIdx} />
-        <RunPanel
-          run={runs[rightIdx]}
-          row={row}
-          editMode={editMode}
-          setEditMode={setEditMode}
-          onGrade={onGrade}
-          gradePending={gradePending}
-          onOpenToolModal={onOpenToolModal}
-          onRetry={onRetry}
-          isRetrying={isRetrying}
-          versionsByResultId={versionsByResultId}
-          onAcceptVersion={onAcceptVersion}
-          onIgnoreVersion={onIgnoreVersion}
-        />
-      </div>
+
+      {viewMode === "responses" ? (
+        <div className="flex divide-x divide-border">
+          <div className="flex-1 p-4 min-w-0">
+            <AgentDropdown runs={runs} row={row} selectedIdx={leftIdx} onChange={setLeftIdx} />
+            <RunPanel
+              run={runs[leftIdx]}
+              row={row}
+              editMode={editMode}
+              setEditMode={setEditMode}
+              onGrade={onGrade}
+              gradePending={gradePending}
+              onOpenToolModal={onOpenToolModal}
+              onRetry={onRetry}
+              isRetrying={isRetrying}
+              versionsByResultId={versionsByResultId}
+              onAcceptVersion={onAcceptVersion}
+              onIgnoreVersion={onIgnoreVersion}
+            />
+          </div>
+          <div className="flex-1 p-4 min-w-0">
+            <AgentDropdown runs={runs} row={row} selectedIdx={rightIdx} onChange={setRightIdx} />
+            <RunPanel
+              run={runs[rightIdx]}
+              row={row}
+              editMode={editMode}
+              setEditMode={setEditMode}
+              onGrade={onGrade}
+              gradePending={gradePending}
+              onOpenToolModal={onOpenToolModal}
+              onRetry={onRetry}
+              isRetrying={isRetrying}
+              versionsByResultId={versionsByResultId}
+              onAcceptVersion={onAcceptVersion}
+              onIgnoreVersion={onIgnoreVersion}
+            />
+          </div>
+        </div>
+      ) : (
+        <div className="flex flex-col min-h-[400px]">
+          {/* Agent dropdowns row */}
+          <div className="flex divide-x divide-border shrink-0 border-b border-border">
+            <div className="flex-1 px-4 pt-3">
+              <AgentDropdown runs={runs} row={row} selectedIdx={leftIdx} onChange={setLeftIdx} />
+            </div>
+            <div className="flex-1 px-4 pt-3">
+              <AgentDropdown runs={runs} row={row} selectedIdx={rightIdx} onChange={setRightIdx} />
+            </div>
+          </div>
+          <TraceComparePanel
+            left={{
+              label: leftRun?.label ?? "Left",
+              toolCalls: (leftPayload?.tool_calls as ToolCall[] | undefined) ?? null,
+              reasoning: (leftPayload?.reasoning as ReasoningStep[] | undefined) ?? null,
+            }}
+            right={{
+              label: rightRun?.label ?? "Right",
+              toolCalls: (rightPayload?.tool_calls as ToolCall[] | undefined) ?? null,
+              reasoning: (rightPayload?.reasoning as ReasoningStep[] | undefined) ?? null,
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }

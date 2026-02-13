@@ -3,6 +3,7 @@
 import { useState, useMemo, type ReactNode } from "react";
 import type { ToolCall } from "@/lib/types";
 import { normalizeSteps, type NormalizedStep } from "@/lib/tool-call-utils";
+import { getSearchText, countMatches } from "@/lib/tool-call-search";
 import { cn } from "@/lib/utils";
 
 interface Props {
@@ -11,43 +12,6 @@ interface Props {
   onSelect: (idx: number) => void;
   onSearchChange: (q: string) => void;
   searchQuery: string;
-}
-
-function getSearchText(tc: ToolCall): string {
-  let text = "";
-  // MCP tool call data
-  if (tc.arguments) {
-    try {
-      const parsed = typeof tc.arguments === "string" ? JSON.parse(tc.arguments) : tc.arguments;
-      text += JSON.stringify(parsed);
-    } catch { text += String(tc.arguments); }
-  }
-  if (tc.response) {
-    try {
-      const parsed = typeof tc.response === "string" ? JSON.parse(tc.response) : tc.response;
-      text += " " + JSON.stringify(parsed);
-    } catch { text += " " + String(tc.response); }
-  }
-  // Web search data (new format)
-  if (tc.query) text += " " + tc.query;
-  if (tc.url) text += " " + tc.url;
-  if (tc.pattern) text += " " + tc.pattern;
-  if (tc.sources) text += " " + JSON.stringify(tc.sources);
-  // Legacy format
-  if (tc.raw_items) text += " " + JSON.stringify(tc.raw_items);
-  return text;
-}
-
-function countMatches(text: string, ql: string): number {
-  if (!ql) return 0;
-  const lower = text.toLowerCase();
-  let count = 0;
-  let pos = lower.indexOf(ql);
-  while (pos >= 0) {
-    count++;
-    pos = lower.indexOf(ql, pos + ql.length);
-  }
-  return count;
 }
 
 function highlightSnippet(snippet: string, query: string): ReactNode {

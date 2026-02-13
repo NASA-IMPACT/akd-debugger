@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import type { ResultOut, RunDetailOut, GradeValue, QueryOut } from "@/lib/types";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 import { GradeButton } from "./grade-button";
 import { ReasoningDisplay } from "./reasoning-display";
 import { ToolPills } from "@/components/tool-calls/tool-pills";
+import { TraceComparePanel } from "@/components/tool-calls/trace-compare-panel";
+import { AgentDropdown } from "./agent-dropdown";
 import { countByKind } from "@/lib/tool-call-utils";
 import { cn } from "@/lib/utils";
 
@@ -15,78 +17,7 @@ const borderColors: Record<string, string> = {
   wrong: "border-grade-wrong-border bg-grade-wrong-bg",
 };
 
-const dotColors: Record<string, string> = {
-  correct: "bg-green-500",
-  partial: "bg-yellow-400",
-  wrong: "bg-red-500",
-  not_graded: "bg-muted-light",
-};
-
-function AgentDropdown({
-  runs,
-  resultsByRun,
-  selectedIdx,
-  onChange,
-}: {
-  runs: RunDetailOut[];
-  resultsByRun: Record<number, ResultOut>;
-  selectedIdx: number;
-  onChange: (idx: number) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handleClick = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handleClick);
-    return () => document.removeEventListener("mousedown", handleClick);
-  }, [open]);
-
-  const selectedRun = runs[selectedIdx];
-  const selectedResult = selectedRun ? resultsByRun[selectedRun.id] : undefined;
-  const selectedGrade = selectedResult?.grade?.grade || "not_graded";
-
-  return (
-    <div ref={ref} className="relative mb-3">
-      <button
-        type="button"
-        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-[var(--surface)] text-sm font-semibold hover:bg-[var(--surface-hover)] transition-colors"
-        onClick={() => setOpen((v) => !v)}
-      >
-        <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColors[selectedGrade])} />
-        <span className="truncate flex-1 text-left">{selectedRun?.label}</span>
-        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" className={cn("shrink-0 transition-transform", open && "rotate-180")}>
-          <path d="M3 4.5l3 3 3-3" />
-        </svg>
-      </button>
-      {open && (
-        <div className="absolute z-10 mt-1 w-full bg-card border border-border rounded-lg shadow-lg py-1 max-h-60 overflow-y-auto">
-          {runs.map((run, idx) => {
-            const r = resultsByRun[run.id];
-            const grade = r?.grade?.grade || "not_graded";
-            return (
-              <button
-                key={run.id}
-                type="button"
-                className={cn(
-                  "w-full flex items-center gap-2 px-3 py-1.5 text-sm text-left hover:bg-[var(--surface-hover)] transition-colors",
-                  idx === selectedIdx && "bg-[var(--surface)] font-bold"
-                )}
-                onClick={() => { onChange(idx); setOpen(false); }}
-              >
-                <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColors[grade])} />
-                <span className="truncate">{run.label}</span>
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+type ModalView = "responses" | "traces";
 
 interface Props {
   queryId: number;
@@ -184,6 +115,7 @@ export function SplitCompareModal({
 }: Props) {
   const [leftIdx, setLeftIdx] = useState(initialLeft);
   const [rightIdx, setRightIdx] = useState(initialRight);
+  const [view, setView] = useState<ModalView>("responses");
 
   // Close on Escape
   useEffect(() => {
@@ -222,14 +154,38 @@ export function SplitCompareModal({
       >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-3 border-b border-border shrink-0">
-          <span className="text-lg font-bold">
-            Query #{query.ordinal || queryId}
-            {query.tag && (
-              <span className="ml-2 inline-block px-2 py-0.5 rounded-xl text-xs font-semibold bg-[var(--tag-blue-bg)] text-[var(--tag-blue-text)]">
-                {query.tag}
-              </span>
-            )}
-          </span>
+          <div className="flex items-center gap-3">
+            <span className="text-lg font-bold">
+              Query #{query.ordinal || queryId}
+              {query.tag && (
+                <span className="ml-2 inline-block px-2 py-0.5 rounded-xl text-xs font-semibold bg-[var(--tag-blue-bg)] text-[var(--tag-blue-text)]">
+                  {query.tag}
+                </span>
+              )}
+            </span>
+            <div className="flex gap-0.5 bg-[var(--surface-hover)] border border-border rounded-md p-0.5 ml-2">
+              <button
+                type="button"
+                className={cn(
+                  "px-3 py-1 rounded text-xs font-semibold transition-colors",
+                  view === "responses" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground"
+                )}
+                onClick={() => setView("responses")}
+              >
+                Responses
+              </button>
+              <button
+                type="button"
+                className={cn(
+                  "px-3 py-1 rounded text-xs font-semibold transition-colors",
+                  view === "traces" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground"
+                )}
+                onClick={() => setView("traces")}
+              >
+                Traces
+              </button>
+            </div>
+          </div>
           <button
             onClick={onClose}
             className="text-muted hover:text-foreground text-xl leading-none px-2"
@@ -238,44 +194,81 @@ export function SplitCompareModal({
           </button>
         </div>
 
-        {/* Two-column body */}
-        <div className="flex flex-1 min-h-0 divide-x divide-border">
-          {/* Left panel */}
-          <div className="flex-1 flex flex-col min-w-0 p-4">
-            <AgentDropdown
-              runs={runs}
-              resultsByRun={resultsByRun}
-              selectedIdx={leftIdx}
-              onChange={setLeftIdx}
-            />
-            <AgentPanel
-              run={leftRun}
-              result={leftResult}
-              tabIdx={leftIdx}
-              queryId={queryId}
-              onGrade={onGrade}
-              onOpenToolModal={onOpenToolModal}
-            />
-          </div>
+        {view === "responses" ? (
+          /* Two-column response body */
+          <div className="flex flex-1 min-h-0 divide-x divide-border">
+            {/* Left panel */}
+            <div className="flex-1 flex flex-col min-w-0 p-4">
+              <AgentDropdown
+                runs={runs}
+                resultsByRun={resultsByRun}
+                selectedIdx={leftIdx}
+                onChange={setLeftIdx}
+              />
+              <AgentPanel
+                run={leftRun}
+                result={leftResult}
+                tabIdx={leftIdx}
+                queryId={queryId}
+                onGrade={onGrade}
+                onOpenToolModal={onOpenToolModal}
+              />
+            </div>
 
-          {/* Right panel */}
-          <div className="flex-1 flex flex-col min-w-0 p-4">
-            <AgentDropdown
-              runs={runs}
-              resultsByRun={resultsByRun}
-              selectedIdx={rightIdx}
-              onChange={setRightIdx}
-            />
-            <AgentPanel
-              run={rightRun}
-              result={rightResult}
-              tabIdx={rightIdx}
-              queryId={queryId}
-              onGrade={onGrade}
-              onOpenToolModal={onOpenToolModal}
+            {/* Right panel */}
+            <div className="flex-1 flex flex-col min-w-0 p-4">
+              <AgentDropdown
+                runs={runs}
+                resultsByRun={resultsByRun}
+                selectedIdx={rightIdx}
+                onChange={setRightIdx}
+              />
+              <AgentPanel
+                run={rightRun}
+                result={rightResult}
+                tabIdx={rightIdx}
+                queryId={queryId}
+                onGrade={onGrade}
+                onOpenToolModal={onOpenToolModal}
+              />
+            </div>
+          </div>
+        ) : (
+          /* Traces view */
+          <div className="flex flex-col flex-1 min-h-0">
+            {/* Agent dropdowns row */}
+            <div className="flex divide-x divide-border shrink-0 border-b border-border">
+              <div className="flex-1 px-4 pt-3">
+                <AgentDropdown
+                  runs={runs}
+                  resultsByRun={resultsByRun}
+                  selectedIdx={leftIdx}
+                  onChange={setLeftIdx}
+                />
+              </div>
+              <div className="flex-1 px-4 pt-3">
+                <AgentDropdown
+                  runs={runs}
+                  resultsByRun={resultsByRun}
+                  selectedIdx={rightIdx}
+                  onChange={setRightIdx}
+                />
+              </div>
+            </div>
+            <TraceComparePanel
+              left={{
+                label: leftRun?.label ?? "Left",
+                toolCalls: leftResult?.tool_calls ?? null,
+                reasoning: leftResult?.reasoning ?? null,
+              }}
+              right={{
+                label: rightRun?.label ?? "Right",
+                toolCalls: rightResult?.tool_calls ?? null,
+                reasoning: rightResult?.reasoning ?? null,
+              }}
             />
           </div>
-        </div>
+        )}
 
         {/* Footer */}
         <div className="px-6 py-2 border-t border-border text-xs text-muted shrink-0">
