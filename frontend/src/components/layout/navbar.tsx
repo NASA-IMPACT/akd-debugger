@@ -13,10 +13,10 @@ import { formatDate } from "@/lib/utils";
 
 const links = [
   { href: "/", label: "Benchmarks" },
+  { href: "/runs", label: "Runs" },
   { href: "/datasets", label: "Datasets" },
   { href: "/agents", label: "Agents" },
   { href: "/compare", label: "Compare" },
-  { href: "/cost-previews", label: "Cost Previews" },
   { href: "/traces", label: "Traces" },
 ];
 
@@ -163,11 +163,11 @@ export function Navbar() {
                             )}
                             {n.notif_type.startsWith("cost_preview_") && (
                               <Link
-                                href="/cost-previews"
+                                href="/runs"
                                 className="text-xs text-brand no-underline hover:underline"
                                 onClick={() => setNotifOpen(false)}
                               >
-                                Open Cost Previews
+                                Open Runs
                               </Link>
                             )}
                             <button

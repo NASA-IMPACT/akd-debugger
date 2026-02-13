@@ -147,7 +147,10 @@ async def _execute_run_inner(run_id: int, query_ids: list[int], batch_size: int)
 
             batch = queries[i : i + batch_size]
             tasks = [
-                _execute_single(executor, q, exec_config, run_id, db) for q in batch
+                _execute_single(
+                    executor, q, exec_config, run_id, run.agent_config_id, db
+                )
+                for q in batch
             ]
             results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -234,12 +237,14 @@ def _save_result_json(filepath: Path, query: Query, result: Result):
 
 
 async def _execute_single(
-    executor, query: Query, config: dict, run_id: int, db
+    executor, query: Query, config: dict, run_id: int, agent_config_id: int, db
 ) -> Result:
     started_at = datetime.now(timezone.utc)
     trace = TraceLog(
         run_id=run_id,
         query_id=query.id,
+        agent_config_id=agent_config_id,
+        trace_type="benchmark",
         provider="openai",
         endpoint="agents.runner.run",
         model=config.get("model"),

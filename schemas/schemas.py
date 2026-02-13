@@ -92,6 +92,28 @@ class AgentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class ChatMessageIn(BaseModel):
+    role: str
+    content: str
+
+
+class AgentChatRequest(BaseModel):
+    messages: list[ChatMessageIn]
+
+
+class AgentChatResponse(BaseModel):
+    assistant_message: str | None = None
+    tool_calls: Any = None
+    reasoning: Any = None
+    usage: Any = None
+    estimated_cost_usd: float = 0.0
+    cost_breakdown: dict = {}
+    missing_model_pricing: bool = False
+    execution_time_seconds: float | None = None
+    trace_log_id: int | None = None
+    error: str | None = None
+
+
 # --- Run ---
 class RunCreate(BaseModel):
     suite_id: int
@@ -205,6 +227,10 @@ class ResultOut(BaseModel):
     id: int
     run_id: int
     query_id: int
+    parent_result_id: int | None = None
+    version_number: int = 1
+    is_default_version: bool = True
+    version_status: str = "active"
     trace_log_id: int | None = None
     agent_response: str | None
     tool_calls: Any = None
@@ -217,6 +243,16 @@ class ResultOut(BaseModel):
     query: QueryOut | None = None
 
     model_config = {"from_attributes": True}
+
+
+class ResultFamilyOut(BaseModel):
+    base_result_id: int
+    versions: list[ResultOut] = []
+
+
+class ResultListOut(BaseModel):
+    results: list[ResultOut] = []
+    versions_by_base_result: dict[int, list[ResultOut]] = {}
 
 
 # --- Grade ---
@@ -297,6 +333,8 @@ class TraceLogOut(BaseModel):
     id: int
     run_id: int | None
     query_id: int | None
+    agent_config_id: int | None
+    trace_type: str
     provider: str
     endpoint: str
     model: str | None
@@ -320,3 +358,22 @@ class TraceSummaryOut(BaseModel):
     count: int
     total_cost_usd: float
     missing_model_pricing_count: int = 0
+
+
+class RunningJobItem(BaseModel):
+    id: int
+    kind: str
+    status: str
+    label: str
+    created_at: datetime
+    started_at: datetime | None = None
+    run_id: int | None = None
+    query_id: int | None = None
+    agent_name: str | None = None
+    suite_name: str | None = None
+
+
+class RunningJobsOut(BaseModel):
+    runs: list[RunningJobItem] = []
+    cost_previews: list[RunningJobItem] = []
+    single_queries: list[RunningJobItem] = []

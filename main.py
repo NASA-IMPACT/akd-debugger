@@ -32,6 +32,11 @@ from config import get_settings
 from pages import views
 
 settings = get_settings()
+cors_origins = [
+    origin.strip() for origin in settings.CORS_ORIGINS.split(",") if origin.strip()
+]
+if "*" in cors_origins:
+    cors_origins = ["*"]
 
 # Ensure OPENAI_API_KEY is available to the agents SDK
 if settings.OPENAI_API_KEY:
@@ -55,7 +60,7 @@ app = FastAPI(title=settings.APP_TITLE, lifespan=lifespan)
 # CORS — allow Next.js dev server
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=cors_origins or ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )

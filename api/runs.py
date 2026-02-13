@@ -24,6 +24,8 @@ from models.run_cost_preview import RunCostPreview
 from models.suite import BenchmarkSuite
 from models.trace_log import TraceLog
 from schemas.schemas import (
+    RunningJobItem,
+    RunningJobsOut,
     RunCostPreviewOut,
     RunCostPreviewRecordOut,
     RunCreate,
@@ -169,6 +171,8 @@ async def _build_preview(
             trace = TraceLog(
                 run_id=None,
                 query_id=q.id,
+                agent_config_id=agent.id,
+                trace_type="preview",
                 provider="openai",
                 endpoint="agents.runner.run.preview",
                 model=agent.model,
@@ -245,6 +249,8 @@ async def _build_preview(
         trace = TraceLog(
             run_id=None,
             query_id=q.id,
+            agent_config_id=agent.id,
+            trace_type="preview",
             provider="openai",
             endpoint="agents.runner.run.preview",
             model=agent.model,
@@ -501,6 +507,73 @@ async def list_runs(tag: str | None = None, db: AsyncSession = Depends(get_db)):
         d.agent_name = r.agent_config.name if r.agent_config else ""
         out.append(d)
     return out
+
+
+@router.get("/jobs", response_model=RunningJobsOut)
+async def list_running_jobs(db: AsyncSession = Depends(get_db)):
+    runs_stmt = (
+        select(Run)
+        .where(Run.status.in_(("pending", "running")))
+        .options(selectinload(Run.suite), selectinload(Run.agent_config))
+        .order_by(Run.created_at.desc())
+    )
+    runs = (await db.execute(runs_stmt)).scalars().all()
+    run_items = [
+        RunningJobItem(
+            id=r.id,
+            kind="benchmark",
+            status=r.status,
+            label=r.label,
+            created_at=r.created_at,
+            started_at=r.started_at,
+            run_id=r.id,
+            agent_name=r.agent_config.name if r.agent_config else None,
+            suite_name=r.suite.name if r.suite else None,
+        )
+        for r in runs
+    ]
+
+    previews_stmt = (
+        select(RunCostPreview)
+        .where(RunCostPreview.status.in_(("pending", "running")))
+        .order_by(RunCostPreview.created_at.desc())
+    )
+    previews = (await db.execute(previews_stmt)).scalars().all()
+    preview_items = [
+        RunningJobItem(
+            id=p.id,
+            kind="cost_preview",
+            status=p.status,
+            label=p.label,
+            created_at=p.created_at,
+            started_at=p.started_at,
+        )
+        for p in previews
+    ]
+
+    retry_stmt = (
+        select(TraceLog)
+        .where(TraceLog.trace_type == "retry", TraceLog.status == "started")
+        .order_by(TraceLog.created_at.desc())
+    )
+    retry_traces = (await db.execute(retry_stmt)).scalars().all()
+    retry_items = [
+        RunningJobItem(
+            id=t.id,
+            kind="single_query_retry",
+            status=t.status,
+            label=f"Retry trace #{t.id}",
+            created_at=t.created_at,
+            started_at=t.started_at,
+            run_id=t.run_id,
+            query_id=t.query_id,
+        )
+        for t in retry_traces
+    ]
+
+    return RunningJobsOut(
+        runs=run_items, cost_previews=preview_items, single_queries=retry_items
+    )
 
 
 @router.post("", response_model=list[RunOut], status_code=201)

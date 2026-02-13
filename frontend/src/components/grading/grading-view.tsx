@@ -46,6 +46,7 @@ interface ToolModalState {
 interface GradingData {
   runs: RunDetailOut[];
   results: Record<number, ResultOut[]>;
+  versionsByBaseResult: Record<number, ResultOut[]>;
 }
 
 // --- localStorage cache helpers ---
@@ -85,6 +86,7 @@ export function GradingView(props: Props) {
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [lastFullyGradedQuery, setLastFullyGradedQuery] = useState<number | null>(null);
   const [activeQueryId, setActiveQueryId] = useState<number | null>(null);
+  const [retryingResultIds, setRetryingResultIds] = useState<Set<number>>(new Set());
   const visibleQueries = useRef<Set<number>>(new Set());
   const isNavigating = useRef(false);
   const navTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -96,15 +98,21 @@ export function GradingView(props: Props) {
     queryFn: async () => {
       const fetchedRuns: RunDetailOut[] = [];
       const fetchedResults: Record<number, ResultOut[]> = {};
+      const fetchedVersions: Record<number, ResultOut[]> = {};
       await Promise.all(runIds.map(async (id) => {
-        const [run, res] = await Promise.all([runsApi.get(id), resultsApi.list(id)]);
+        const [run, res] = await Promise.all([runsApi.get(id), resultsApi.listFamilies(id)]);
         fetchedRuns.push(run);
-        fetchedResults[id] = res;
+        fetchedResults[id] = res.results;
+        Object.assign(fetchedVersions, res.versions_by_base_result);
       }));
       // Sort runs to match runIds order
       const runMap = Object.fromEntries(fetchedRuns.map((r) => [r.id, r]));
       const orderedRuns = runIds.map((id) => runMap[id]).filter(Boolean);
-      const result = { runs: orderedRuns, results: fetchedResults };
+      const result = {
+        runs: orderedRuns,
+        results: fetchedResults,
+        versionsByBaseResult: fetchedVersions,
+      };
       saveCache(runIds, result);
       return result;
     },
@@ -114,6 +122,16 @@ export function GradingView(props: Props) {
 
   const runs = data?.runs ?? [];
   const results = data?.results ?? {};
+  const versionsByBaseResult = data?.versionsByBaseResult ?? {};
+  const versionsByResultId = useMemo(() => {
+    const byId: Record<number, ResultOut[]> = {};
+    Object.values(versionsByBaseResult).forEach((family) => {
+      family.forEach((version) => {
+        byId[version.id] = family;
+      });
+    });
+    return byId;
+  }, [versionsByBaseResult]);
 
   // Compute data for compare mode
   const { allResults, queryIds: compareQueryIds } = useMemo(() => {
@@ -155,6 +173,42 @@ export function GradingView(props: Props) {
     },
   });
 
+  const retryMutation = useMutation({
+    mutationFn: (resultId: number) => resultsApi.retry(resultId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qKey });
+    },
+  });
+
+  const handleRetry = useCallback((resultId: number) => {
+    setRetryingResultIds((prev) => new Set(prev).add(resultId));
+    retryMutation.mutate(resultId, {
+      onSettled: () => {
+        setRetryingResultIds((prev) => {
+          const next = new Set(prev);
+          next.delete(resultId);
+          return next;
+        });
+      },
+    });
+  }, [retryMutation]);
+
+  const acceptVersionMutation = useMutation({
+    mutationFn: ({ resultId, versionId }: { resultId: number; versionId: number }) =>
+      resultsApi.acceptVersion(resultId, versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qKey });
+    },
+  });
+
+  const ignoreVersionMutation = useMutation({
+    mutationFn: ({ resultId, versionId }: { resultId: number; versionId: number }) =>
+      resultsApi.deleteVersion(resultId, versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: qKey });
+    },
+  });
+
   const handleGrade = useCallback(
     (resultId: number, grade: GradeValue, queryId?: number) => {
       // For single-run mode, find the queryId from the result
@@ -177,7 +231,11 @@ export function GradingView(props: Props) {
   const handleOpenToolModal = useCallback(
     (resultId: number, idx: number, runLabel?: string) => {
       for (const rid of runIds) {
-        const r = results[rid]?.find((res) => res.id === resultId);
+        const runResults = results[rid] || [];
+        const r = runResults.find((res) => res.id === resultId)
+          || runResults
+            .flatMap((res) => versionsByResultId[res.id] || [res])
+            .find((res) => res.id === resultId);
         if (r?.tool_calls?.length) {
           setToolModal({
             toolCalls: r.tool_calls,
@@ -189,7 +247,7 @@ export function GradingView(props: Props) {
         }
       }
     },
-    [runIds, results]
+    [runIds, results, versionsByResultId]
   );
 
   const singleQueryIds = useMemo(() => singleSortedResults.map((r) => r.query_id), [singleSortedResults]);
@@ -460,7 +518,16 @@ export function GradingView(props: Props) {
                 resultsByRun={allResults[qid]}
                 onGrade={handleGrade}
                 onOpenToolModal={(resultId, idx, runLabel) => handleOpenToolModal(resultId, idx, runLabel)}
+                versionsByResultId={versionsByResultId}
+                onRetry={handleRetry}
+                onAcceptVersion={(resultId, versionId) =>
+                  acceptVersionMutation.mutate({ resultId, versionId })
+                }
+                onIgnoreVersion={(resultId, versionId) =>
+                  ignoreVersionMutation.mutate({ resultId, versionId })
+                }
                 isActive={activeQueryId === qid}
+                isRetrying={Object.values(allResults[qid] || {}).some((res) => retryingResultIds.has(res.id))}
               />
             </div>
           );
@@ -472,6 +539,15 @@ export function GradingView(props: Props) {
                 result={r}
                 onGrade={handleGrade}
                 onOpenToolModal={handleOpenToolModal}
+                versions={versionsByResultId[r.id] || [r]}
+                onRetry={handleRetry}
+                onAcceptVersion={(resultId, versionId) =>
+                  acceptVersionMutation.mutate({ resultId, versionId })
+                }
+                onIgnoreVersion={(resultId, versionId) =>
+                  ignoreVersionMutation.mutate({ resultId, versionId })
+                }
+                isRetrying={retryingResultIds.has(r.id)}
               />
             </div>
           ))

@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     OPENAI_API_KEY: str = ""
     OUTPUT_BASE_DIR: str = "~/axiom_data"
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000,*"
 
     model_config = {"env_file": ".env", "env_file_encoding": "utf-8"}
 

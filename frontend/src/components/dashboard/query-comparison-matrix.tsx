@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import type { RunAnalyticsOut, QueryGradeRow, GradeValue } from "@/lib/types";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import type { RunAnalyticsOut, QueryGradeRow, GradeValue, ResultOut } from "@/lib/types";
 import { gradesApi } from "@/lib/api/grades";
+import { resultsApi } from "@/lib/api/results";
 import { GradeButton } from "@/components/grading/grade-button";
 import { ReasoningDisplay } from "@/components/grading/reasoning-display";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
@@ -12,6 +13,7 @@ import { ToolModal } from "@/components/tool-calls/tool-modal";
 import { countByKind } from "@/lib/tool-call-utils";
 import { cn } from "@/lib/utils";
 import type { ToolCall, ReasoningStep } from "@/lib/types";
+import { RotateCcw } from "lucide-react";
 
 type Filter = "all" | "disagreements";
 
@@ -227,6 +229,11 @@ function RunPanel({
   onGrade,
   gradePending,
   onOpenToolModal,
+  onRetry,
+  isRetrying,
+  versionsByResultId,
+  onAcceptVersion,
+  onIgnoreVersion,
 }: {
   run: RunAnalyticsOut;
   row: QueryGradeRow;
@@ -235,46 +242,123 @@ function RunPanel({
   onGrade: (runId: number, grade: GradeValue) => void;
   gradePending: boolean;
   onOpenToolModal?: (toolCalls: ToolCall[], idx: number, runLabel: string) => void;
+  onRetry?: (resultId: number) => void;
+  isRetrying?: boolean;
+  versionsByResultId?: Record<number, ResultOut[]>;
+  onAcceptVersion?: (resultId: number, versionId: number) => void;
+  onIgnoreVersion?: (resultId: number, versionId: number) => void;
 }) {
+  const baseResultId = row.result_ids?.[run.run_id];
+  const versions = baseResultId && versionsByResultId ? versionsByResultId[baseResultId] || [] : [];
+  const [selectedVersionId, setSelectedVersionId] = useState<number | null>(null);
+
+  // Determine which version to display
+  const activeVersion = useMemo(() => {
+    if (!versions.length) return null;
+    if (selectedVersionId) {
+      const found = versions.find((v) => v.id === selectedVersionId);
+      if (found) return found;
+    }
+    return versions.find((v) => v.is_default_version) || versions[0];
+  }, [versions, selectedVersionId]);
+
+  // Use version data if available, otherwise fall back to row payload
   const payload = row.responses?.[run.run_id];
-  const activeGrade = row.grades[run.run_id] as GradeValue | undefined;
-  const canGrade = Boolean(row.result_ids?.[run.run_id]);
-  const tokens = payload?.usage?.total_tokens ? payload.usage.total_tokens.toLocaleString() : "N/A";
-  const time = payload?.execution_time_seconds ? payload.execution_time_seconds.toFixed(1) + "s" : "N/A";
-  const counts = countByKind(payload?.tool_calls as ToolCall[] | undefined);
+  const response = activeVersion?.agent_response ?? payload?.agent_response;
+  const error = activeVersion?.error ?? payload?.error;
+  const toolCalls = (activeVersion?.tool_calls ?? payload?.tool_calls) as ToolCall[] | undefined;
+  const reasoning = (activeVersion?.reasoning ?? payload?.reasoning) as ReasoningStep[] | undefined;
+  const usage = activeVersion?.usage ?? payload?.usage;
+  const execTime = activeVersion?.execution_time_seconds ?? payload?.execution_time_seconds;
+  const activeGrade = activeVersion?.grade?.grade as GradeValue | undefined
+    ?? row.grades[run.run_id] as GradeValue | undefined;
+
+  const canGrade = Boolean(baseResultId);
+  const tokens = usage?.total_tokens ? usage.total_tokens.toLocaleString() : "N/A";
+  const time = execTime ? execTime.toFixed(1) + "s" : "N/A";
+  const counts = countByKind(toolCalls);
 
   return (
     <div className="p-4 bg-[var(--surface)] border border-border rounded-b-lg">
       <div className="flex items-center justify-between mb-3">
         <span className="text-sm font-semibold text-muted">Agent Response</span>
-        <label
-          className={cn(
-            "inline-flex items-center gap-2 text-xs",
-            canGrade ? "text-foreground" : "text-muted"
+        <div className="flex items-center gap-2">
+          {/* Retry button */}
+          {baseResultId && onRetry && (
+            <button
+              className="w-8 h-8 rounded-lg border border-border bg-[var(--surface)] text-muted hover:text-foreground hover:bg-[var(--surface-hover)] flex items-center justify-center"
+              onClick={() => onRetry(baseResultId)}
+              title="Retry query"
+              disabled={isRetrying}
+            >
+              <RotateCcw size={14} className={isRetrying ? "animate-spin" : ""} />
+            </button>
           )}
-          title={canGrade ? "Toggle grade controls" : "No result found for this run"}
-        >
-          <span>Edit grades</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={editMode}
-            onClick={() => canGrade && setEditMode(!editMode)}
-            disabled={!canGrade}
-            className={cn(
-              "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
-              editMode ? "bg-brand" : "bg-border",
-              !canGrade && "opacity-50 cursor-not-allowed"
-            )}
-          >
-            <span
-              className={cn(
-                "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
-                editMode ? "translate-x-4" : "translate-x-0.5"
+          {/* Version selector */}
+          {versions.length > 1 && (
+            <>
+              <select
+                className="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--surface)] border border-border text-foreground outline-none"
+                value={String(activeVersion?.id ?? "")}
+                onChange={(e) => setSelectedVersionId(parseInt(e.target.value, 10))}
+              >
+                {versions.map((version) => (
+                  <option key={version.id} value={version.id}>
+                    v{version.version_number}{version.is_default_version ? " (default)" : ""}
+                  </option>
+                ))}
+              </select>
+              {activeVersion && !activeVersion.is_default_version && baseResultId && (
+                <>
+                  <button
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--tag-green-bg)] text-[var(--tag-green-text)]"
+                    onClick={() => onAcceptVersion?.(baseResultId, activeVersion.id)}
+                  >
+                    Set default
+                  </button>
+                  <button
+                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--tag-orange-bg)] text-[var(--tag-orange-text)]"
+                    onClick={() => {
+                      const ok = window.confirm("This version will be deleted. Do you really want to continue?");
+                      if (!ok) return;
+                      onIgnoreVersion?.(baseResultId, activeVersion.id);
+                    }}
+                  >
+                    Ignore
+                  </button>
+                </>
               )}
-            />
-          </button>
-        </label>
+            </>
+          )}
+          <label
+            className={cn(
+              "inline-flex items-center gap-2 text-xs",
+              canGrade ? "text-foreground" : "text-muted"
+            )}
+            title={canGrade ? "Toggle grade controls" : "No result found for this run"}
+          >
+            <span>Edit grades</span>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={editMode}
+              onClick={() => canGrade && setEditMode(!editMode)}
+              disabled={!canGrade}
+              className={cn(
+                "relative inline-flex h-5 w-9 items-center rounded-full transition-colors",
+                editMode ? "bg-brand" : "bg-border",
+                !canGrade && "opacity-50 cursor-not-allowed"
+              )}
+            >
+              <span
+                className={cn(
+                  "inline-block h-4 w-4 transform rounded-full bg-white transition-transform",
+                  editMode ? "translate-x-4" : "translate-x-0.5"
+                )}
+              />
+            </button>
+          </label>
+        </div>
       </div>
 
       {editMode && canGrade && (
@@ -291,11 +375,11 @@ function RunPanel({
         </div>
       )}
 
-      {payload?.error ? (
-        <div className="text-destructive font-semibold mb-3">ERROR: {payload.error}</div>
+      {error ? (
+        <div className="text-destructive font-semibold mb-3">ERROR: {error}</div>
       ) : null}
       <div className="bg-card border-2 border-border rounded-lg p-4 max-h-[360px] overflow-y-auto whitespace-pre-wrap text-sm">
-        <MarkdownRenderer content={payload?.agent_response || "N/A"} />
+        <MarkdownRenderer content={response || "N/A"} />
       </div>
 
       {/* Stats */}
@@ -309,12 +393,12 @@ function RunPanel({
 
       {/* Tool pills */}
       <ToolPills
-        toolCalls={(payload?.tool_calls as ToolCall[] | undefined) ?? null}
-        onClickTool={(i) => onOpenToolModal?.(payload?.tool_calls as ToolCall[], i, run.label)}
+        toolCalls={(toolCalls as ToolCall[] | undefined) ?? null}
+        onClickTool={(i) => onOpenToolModal?.(toolCalls as ToolCall[], i, run.label)}
       />
 
       {/* Reasoning */}
-      <ReasoningDisplay reasoning={(payload?.reasoning as ReasoningStep[] | undefined) ?? null} />
+      <ReasoningDisplay reasoning={reasoning ?? null} />
     </div>
   );
 }
@@ -393,6 +477,11 @@ function SplitPanel({
   onGrade,
   gradePending,
   onOpenToolModal,
+  onRetry,
+  isRetrying,
+  versionsByResultId,
+  onAcceptVersion,
+  onIgnoreVersion,
 }: {
   row: QueryGradeRow;
   runs: RunAnalyticsOut[];
@@ -403,6 +492,11 @@ function SplitPanel({
   onGrade: (runId: number, grade: GradeValue) => void;
   gradePending: boolean;
   onOpenToolModal?: (toolCalls: ToolCall[], idx: number, runLabel: string) => void;
+  onRetry?: (resultId: number) => void;
+  isRetrying?: boolean;
+  versionsByResultId?: Record<number, ResultOut[]>;
+  onAcceptVersion?: (resultId: number, versionId: number) => void;
+  onIgnoreVersion?: (resultId: number, versionId: number) => void;
 }) {
   const [leftIdx, setLeftIdx] = useState(initialLeft);
   const [rightIdx, setRightIdx] = useState(initialRight);
@@ -419,6 +513,11 @@ function SplitPanel({
           onGrade={onGrade}
           gradePending={gradePending}
           onOpenToolModal={onOpenToolModal}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
+          versionsByResultId={versionsByResultId}
+          onAcceptVersion={onAcceptVersion}
+          onIgnoreVersion={onIgnoreVersion}
         />
       </div>
       <div className="flex-1 p-4 min-w-0">
@@ -431,6 +530,11 @@ function SplitPanel({
           onGrade={onGrade}
           gradePending={gradePending}
           onOpenToolModal={onOpenToolModal}
+          onRetry={onRetry}
+          isRetrying={isRetrying}
+          versionsByResultId={versionsByResultId}
+          onAcceptVersion={onAcceptVersion}
+          onIgnoreVersion={onIgnoreVersion}
         />
       </div>
     </div>
@@ -452,6 +556,7 @@ function QueryCompareModal({
   gradePending: boolean;
   onNavigate: (direction: number) => void;
 }) {
+  const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState(0);
   const [editMode, setEditMode] = useState(false);
   const [splitView, setSplitView] = useState<{ left: number; right: number } | null>(null);
@@ -461,6 +566,52 @@ function QueryCompareModal({
   const handleOpenToolModal = (toolCalls: ToolCall[], idx: number, runLabel: string) => {
     setToolModal({ toolCalls, idx, runLabel });
   };
+
+  // Fetch versions for all runs
+  const runIds = useMemo(() => runs.map((r) => r.run_id), [runs]);
+  const { data: versionsByResultId = {} } = useQuery({
+    queryKey: ["compare-versions", ...runIds],
+    queryFn: async () => {
+      const results = await Promise.all(runIds.map((id) => resultsApi.listFamilies(id)));
+      const merged: Record<number, ResultOut[]> = {};
+      for (const r of results) {
+        for (const [key, versions] of Object.entries(r.versions_by_base_result)) {
+          merged[Number(key)] = versions;
+        }
+      }
+      return merged;
+    },
+    enabled: runIds.length > 0,
+  });
+
+  // Retry mutation
+  const retryMutation = useMutation({
+    mutationFn: (resultId: number) => resultsApi.retry(resultId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["compare-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["compare-versions"] });
+    },
+  });
+
+  // Accept version mutation
+  const acceptVersionMutation = useMutation({
+    mutationFn: ({ resultId, versionId }: { resultId: number; versionId: number }) =>
+      resultsApi.acceptVersion(resultId, versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["compare-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["compare-versions"] });
+    },
+  });
+
+  // Delete version mutation
+  const deleteVersionMutation = useMutation({
+    mutationFn: ({ resultId, versionId }: { resultId: number; versionId: number }) =>
+      resultsApi.deleteVersion(resultId, versionId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["compare-analytics"] });
+      queryClient.invalidateQueries({ queryKey: ["compare-versions"] });
+    },
+  });
 
   // Reset tab when navigating to a different query
   useEffect(() => {
@@ -581,6 +732,11 @@ function QueryCompareModal({
               onGrade={onGrade}
               gradePending={gradePending}
               onOpenToolModal={handleOpenToolModal}
+              onRetry={(id) => retryMutation.mutate(id)}
+              isRetrying={retryMutation.isPending}
+              versionsByResultId={versionsByResultId}
+              onAcceptVersion={(rid, vid) => acceptVersionMutation.mutate({ resultId: rid, versionId: vid })}
+              onIgnoreVersion={(rid, vid) => deleteVersionMutation.mutate({ resultId: rid, versionId: vid })}
             />
           ) : (
             runs.map((run, idx) => {
@@ -595,6 +751,11 @@ function QueryCompareModal({
                   onGrade={onGrade}
                   gradePending={gradePending}
                   onOpenToolModal={handleOpenToolModal}
+                  onRetry={(id) => retryMutation.mutate(id)}
+                  isRetrying={retryMutation.isPending}
+                  versionsByResultId={versionsByResultId}
+                  onAcceptVersion={(rid, vid) => acceptVersionMutation.mutate({ resultId: rid, versionId: vid })}
+                  onIgnoreVersion={(rid, vid) => deleteVersionMutation.mutate({ resultId: rid, versionId: vid })}
                 />
               );
             })

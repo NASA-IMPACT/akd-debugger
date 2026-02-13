@@ -28,3 +28,6 @@ class AgentConfig(Base):
     )
 
     runs: Mapped[list["Run"]] = relationship("Run", back_populates="agent_config")
+    trace_logs: Mapped[list["TraceLog"]] = relationship(
+        "TraceLog", back_populates="agent_config"
+    )

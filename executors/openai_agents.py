@@ -9,7 +9,9 @@ class OpenAIAgentsExecutor(AgentExecutor):
     def executor_type() -> str:
         return "openai_agents"
 
-    async def execute(self, query: str, config: dict) -> ExecutionResult:
+    async def _execute_conversation(
+        self, conversation: list[dict], config: dict
+    ) -> ExecutionResult:
         from agents import (
             Agent,
             HostedMCPTool,
@@ -83,13 +85,6 @@ class OpenAIAgentsExecutor(AgentExecutor):
                 tools=tools,
                 model_settings=model_settings,
             )
-
-            conversation = [
-                {
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": query}],
-                }
-            ]
 
             result = await Runner.run(
                 agent,
@@ -196,3 +191,30 @@ class OpenAIAgentsExecutor(AgentExecutor):
                 error=str(e),
                 execution_time_seconds=round(elapsed, 2),
             )
+
+    async def execute(self, query: str, config: dict) -> ExecutionResult:
+        conversation = [
+            {
+                "role": "user",
+                "content": [{"type": "input_text", "text": query}],
+            }
+        ]
+        return await self._execute_conversation(conversation, config)
+
+    async def execute_chat(self, messages: list[dict], config: dict) -> ExecutionResult:
+        conversation: list[dict] = []
+        for message in messages:
+            role = str(message.get("role", "user"))
+            content = str(message.get("content", ""))
+            if not content.strip():
+                continue
+            content_type = "input_text" if role == "user" else "output_text"
+            conversation.append(
+                {
+                    "role": role,
+                    "content": [{"type": content_type, "text": content}],
+                }
+            )
+        if not conversation:
+            return ExecutionResult(error="No chat messages provided")
+        return await self._execute_conversation(conversation, config)

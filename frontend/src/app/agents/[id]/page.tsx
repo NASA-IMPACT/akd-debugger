@@ -10,12 +10,14 @@ import { PageHeader } from "@/components/layout/page-header";
 import { TagBadge } from "@/components/ui/tag-badge";
 import { JsonTree } from "@/components/json/json-tree";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
+import { AgentChatView } from "@/components/agents/agent-chat-view";
+import { AgentTracesView } from "@/components/agents/agent-traces-view";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import {
   X, Pencil, Copy, Check, Trash2, Save,
   FileText, Wrench, Settings, Cpu, Cog, Calendar, Info,
-  SquarePen, Eye, ClipboardPaste,
+  SquarePen, Eye, ClipboardPaste, MessageSquare, Workflow,
 } from "lucide-react";
 import { encodingForModel } from "js-tiktoken";
 import Editor from "react-simple-code-editor";
@@ -34,14 +36,22 @@ const highlightCode = (code: string) =>
 // Types & constants
 // ---------------------------------------------------------------------------
 
-type SectionKey = "general" | "prompt" | "tools" | "settings" | "paste";
+type SectionKey = "general" | "prompt" | "tools" | "settings" | "paste" | "traces" | "chat";
 
-const sectionMeta: { key: SectionKey; label: string; icon: typeof FileText; editOnly?: boolean }[] = [
+const sectionMeta: {
+  key: SectionKey;
+  label: string;
+  icon: typeof FileText;
+  editOnly?: boolean;
+  viewOnly?: boolean;
+}[] = [
   { key: "general", label: "General", icon: Info },
   { key: "prompt", label: "System Prompt", icon: FileText },
   { key: "tools", label: "Tools Config", icon: Wrench },
   { key: "settings", label: "Model Settings", icon: Settings },
   { key: "paste", label: "Paste Code", icon: ClipboardPaste },
+  { key: "traces", label: "Traces", icon: Workflow, viewOnly: true },
+  { key: "chat", label: "Chat", icon: MessageSquare, viewOnly: true },
 ];
 
 const inputCls = "w-full px-3 py-2 rounded-lg text-sm outline-none transition-all bg-[var(--surface)] border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
@@ -421,7 +431,10 @@ export default function AgentDetailPage() {
   const agentId = Number(params.id);
 
   const [editing, setEditing] = useState(searchParams.get("edit") === "1");
-  const [active, setActive] = useState<SectionKey>("general");
+  const initialTab = searchParams.get("tab") as SectionKey | null;
+  const [active, setActive] = useState<SectionKey>(
+    initialTab && sectionMeta.some((s) => s.key === initialTab) ? initialTab : "general"
+  );
   const [form, setForm] = useState<FormState | null>(null);
   const [deleteModal, setDeleteModal] = useState(false);
 
@@ -435,13 +448,16 @@ export default function AgentDetailPage() {
 
   const startEditing = () => {
     if (agent) setForm(agentToForm(agent));
+    if (active === "traces" || active === "chat") setActive("general");
     setEditing(true);
   };
 
   const cancelEditing = () => {
     setEditing(false);
     setForm(null);
-    if (active === "paste") setActive("general");
+    if (active === "paste" || active === "traces" || active === "chat") {
+      setActive("general");
+    }
   };
 
   const saveMutation = useMutation({
@@ -469,7 +485,9 @@ export default function AgentDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["agents"] });
       setEditing(false);
       setForm(null);
-      if (active === "paste") setActive("general");
+      if (active === "paste" || active === "traces" || active === "chat") {
+        setActive("general");
+      }
     },
     onError: (err: Error) => alert(err.message),
   });
@@ -576,7 +594,7 @@ export default function AgentDetailPage() {
           {/* Left sidebar */}
           <div className="w-48 shrink-0 border-r border-border/30 flex flex-col bg-[var(--surface)]">
             <div className="flex-1 overflow-y-auto py-1">
-              {sectionMeta.filter((s) => !s.editOnly || editing).map((s) => {
+              {sectionMeta.filter((s) => (editing ? !s.viewOnly : !s.editOnly)).map((s) => {
                 const Icon = s.icon;
                 const isActive = s.key === active;
                 return (
@@ -629,7 +647,15 @@ export default function AgentDetailPage() {
                 )}
                 {editing && active !== "general" && (
                   <span className="text-[10px] text-muted-light">
-                    {active === "prompt" ? "Supports Markdown" : active === "paste" ? "Raw source code" : "JSON format"}
+                    {active === "prompt"
+                      ? "Supports Markdown"
+                      : active === "paste"
+                      ? "Raw source code"
+                      : active === "traces"
+                      ? "Agent execution traces"
+                      : active === "chat"
+                      ? "Session-only history"
+                      : "JSON format"}
                   </span>
                 )}
               </span>
@@ -668,6 +694,10 @@ export default function AgentDetailPage() {
                   <ToolsView agent={agent} />
                 ) : active === "paste" ? (
                   <PasteCodeView agent={agent} />
+                ) : active === "traces" ? (
+                  <AgentTracesView agentId={agent.id} />
+                ) : active === "chat" ? (
+                  <AgentChatView agentId={agent.id} />
                 ) : (
                   <SettingsView agent={agent} />
                 )

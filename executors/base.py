@@ -26,6 +26,15 @@ class AgentExecutor(ABC):
         """
         ...
 
+    async def execute_chat(self, messages: list[dict], config: dict) -> ExecutionResult:
+        """Execute a chat conversation represented as role/content message dicts."""
+        last_user = ""
+        for message in reversed(messages):
+            if message.get("role") == "user":
+                last_user = str(message.get("content", ""))
+                break
+        return await self.execute(last_user, config)
+
     @staticmethod
     @abstractmethod
     def executor_type() -> str:

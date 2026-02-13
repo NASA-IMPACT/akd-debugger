@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, Text, func
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -16,6 +16,18 @@ class Result(Base):
     )
     query_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("queries.id"), nullable=False
+    )
+    parent_result_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("results.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    version_number: Mapped[int] = mapped_column(Integer, nullable=False, server_default="1")
+    is_default_version: Mapped[bool] = mapped_column(
+        Boolean,
+        nullable=False, server_default="true", index=True
+    )
+    version_status: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False, server_default="active", index=True
     )
     trace_log_id: Mapped[int | None] = mapped_column(
         Integer,
@@ -35,6 +47,16 @@ class Result(Base):
 
     run: Mapped["Run"] = relationship("Run", back_populates="results")
     query: Mapped["Query"] = relationship("Query", back_populates="results")
+    parent: Mapped["Result | None"] = relationship(
+        "Result",
+        remote_side=[id],
+        back_populates="versions",
+    )
+    versions: Mapped[list["Result"]] = relationship(
+        "Result",
+        back_populates="parent",
+        cascade="all, delete-orphan",
+    )
     trace_log: Mapped["TraceLog | None"] = relationship(
         "TraceLog", back_populates="result"
     )

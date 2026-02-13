@@ -10,11 +10,21 @@ from services.openai_pricing import calculate_cost
 router = APIRouter()
 
 
-def _apply_filters(stmt, run_id: int | None, status: str | None):
+def _apply_filters(
+    stmt,
+    run_id: int | None,
+    status: str | None,
+    trace_type: str | None = None,
+    agent_config_id: int | None = None,
+):
     if run_id is not None:
         stmt = stmt.where(TraceLog.run_id == run_id)
     if status:
         stmt = stmt.where(TraceLog.status == status)
+    if trace_type:
+        stmt = stmt.where(TraceLog.trace_type == trace_type)
+    if agent_config_id is not None:
+        stmt = stmt.where(TraceLog.agent_config_id == agent_config_id)
     return stmt
 
 
@@ -26,6 +36,8 @@ def _trace_to_out(trace: TraceLog) -> TraceLogOut:
         id=trace.id,
         run_id=trace.run_id,
         query_id=trace.query_id,
+        agent_config_id=trace.agent_config_id,
+        trace_type=trace.trace_type,
         provider=trace.provider,
         endpoint=trace.endpoint,
         model=trace.model,
@@ -56,11 +68,13 @@ def _trace_to_out(trace: TraceLog) -> TraceLogOut:
 async def list_traces(
     run_id: int | None = None,
     status: str | None = None,
+    trace_type: str | None = None,
+    agent_config_id: int | None = None,
     limit: int = 200,
     db: AsyncSession = Depends(get_db),
 ):
     q = min(max(limit, 1), 1000)
-    stmt = _apply_filters(select(TraceLog), run_id, status)
+    stmt = _apply_filters(stmt=select(TraceLog), run_id=run_id, status=status, trace_type=trace_type, agent_config_id=agent_config_id)
     stmt = stmt.order_by(TraceLog.created_at.desc()).limit(q)
     result = await db.execute(stmt)
     return [_trace_to_out(r) for r in result.scalars().all()]
@@ -70,9 +84,17 @@ async def list_traces(
 async def traces_summary(
     run_id: int | None = None,
     status: str | None = None,
+    trace_type: str | None = None,
+    agent_config_id: int | None = None,
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = _apply_filters(select(TraceLog).order_by(TraceLog.created_at.desc()), run_id, status)
+    stmt = _apply_filters(
+        stmt=select(TraceLog).order_by(TraceLog.created_at.desc()),
+        run_id=run_id,
+        status=status,
+        trace_type=trace_type,
+        agent_config_id=agent_config_id,
+    )
     traces = (await db.execute(stmt)).scalars().all()
     total_cost = 0.0
     missing = 0

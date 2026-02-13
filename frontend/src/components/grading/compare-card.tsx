@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import type { ResultOut, RunDetailOut, GradeValue, QueryOut } from "@/lib/types";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 import { GradeButton } from "./grade-button";
@@ -9,15 +9,21 @@ import { ToolPills } from "@/components/tool-calls/tool-pills";
 import { countByKind } from "@/lib/tool-call-utils";
 import { cn } from "@/lib/utils";
 import { SplitCompareModal } from "./split-compare-modal";
+import { RotateCcw } from "lucide-react";
 
 interface Props {
   queryId: number;
   query: QueryOut;
   runs: RunDetailOut[];
   resultsByRun: Record<number, ResultOut>;
+  versionsByResultId: Record<number, ResultOut[]>;
   onGrade: (resultId: number, grade: GradeValue, queryId: number, tabIdx: number) => void;
   onOpenToolModal: (resultId: number, idx: number, runLabel: string) => void;
+  onRetry: (resultId: number) => void;
+  onAcceptVersion: (resultId: number, versionId: number) => void;
+  onIgnoreVersion: (resultId: number, versionId: number) => void;
   isActive?: boolean;
+  isRetrying?: boolean;
 }
 
 const borderColors: Record<string, string> = {
@@ -33,11 +39,35 @@ const dotColors: Record<string, string> = {
   not_graded: "bg-muted-light",
 };
 
-export function CompareCard({ queryId, query, runs, resultsByRun, onGrade, onOpenToolModal, isActive }: Props) {
+export function CompareCard({
+  queryId,
+  query,
+  runs,
+  resultsByRun,
+  versionsByResultId,
+  onGrade,
+  onOpenToolModal,
+  onRetry,
+  onAcceptVersion,
+  onIgnoreVersion,
+  isActive,
+  isRetrying = false,
+}: Props) {
   const [activeTab, setActiveTab] = useState(0);
   const [tabsMinimized, setTabsMinimized] = useState(false);
   const [splitCompare, setSplitCompare] = useState<{ left: number; right: number } | null>(null);
+  const [selectedVersionByRun, setSelectedVersionByRun] = useState<Record<number, number>>({});
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const defaultVersionByRun = useMemo(() => {
+    const next: Record<number, number> = {};
+    runs.forEach((run) => {
+      const base = resultsByRun[run.id];
+      if (!base) return;
+      const versions = versionsByResultId[base.id] || [base];
+      next[run.id] = versions.find((v) => v.is_default_version)?.id || base.id;
+    });
+    return next;
+  }, [runs, resultsByRun, versionsByResultId]);
 
   const handleTabClick = useCallback((e: React.MouseEvent, idx: number) => {
     if (e.shiftKey && runs.length > 1 && idx !== activeTab) {
@@ -185,13 +215,18 @@ export function CompareCard({ queryId, query, runs, resultsByRun, onGrade, onOpe
 
       {/* Tab panels */}
       {runs.map((run, idx) => {
-        const r = resultsByRun[run.id];
+        const base = resultsByRun[run.id];
         if (idx !== activeTab) return null;
-        if (!r) {
+        if (!base) {
           return (
             <div key={run.id} className="p-4 text-muted-light italic">No data for this query</div>
           );
         }
+        const versions = versionsByResultId[base.id] || [base];
+        const selectedVersionId = selectedVersionByRun[run.id]
+          || defaultVersionByRun[run.id]
+          || base.id;
+        const r = versions.find((v) => v.id === selectedVersionId) || versions[0];
         const grade = r.grade?.grade || "";
         const tokens = r.usage?.total_tokens ? r.usage.total_tokens.toLocaleString() : "N/A";
         const time = r.execution_time_seconds ? r.execution_time_seconds.toFixed(1) + "s" : "N/A";
@@ -199,6 +234,58 @@ export function CompareCard({ queryId, query, runs, resultsByRun, onGrade, onOpe
 
         return (
           <div key={run.id} className="p-4">
+            <div className="mb-3 flex items-center justify-end gap-2 flex-wrap">
+              <button
+                className="w-8 h-8 rounded-lg border border-border bg-[var(--surface)] text-muted hover:text-foreground hover:bg-[var(--surface-hover)] flex items-center justify-center"
+                onClick={() => onRetry(base.id)}
+                title="Retry query"
+                disabled={isRetrying}
+              >
+                <RotateCcw size={14} className={isRetrying ? "animate-spin" : ""} />
+              </button>
+              {versions.length > 1 && (
+                <>
+                  <select
+                    className="px-2.5 py-1.5 rounded-lg text-xs bg-[var(--surface)] border border-border text-foreground outline-none"
+                    value={String(r.id)}
+                    onChange={(e) =>
+                      setSelectedVersionByRun((prev) => ({
+                        ...prev,
+                        [run.id]: parseInt(e.target.value, 10),
+                      }))
+                    }
+                  >
+                    {versions.map((version) => (
+                      <option key={version.id} value={version.id}>
+                        v{version.version_number}{version.is_default_version ? " (default)" : ""}
+                      </option>
+                    ))}
+                  </select>
+                  {!r.is_default_version && (
+                    <>
+                      <button
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--tag-green-bg)] text-[var(--tag-green-text)]"
+                        onClick={() => onAcceptVersion(base.id, r.id)}
+                      >
+                        Set default
+                      </button>
+                      <button
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--tag-orange-bg)] text-[var(--tag-orange-text)]"
+                        onClick={() => {
+                          const ok = window.confirm(
+                            "This version will be deleted. Do you really want to continue?"
+                          );
+                          if (!ok) return;
+                          onIgnoreVersion(base.id, r.id);
+                        }}
+                      >
+                        Ignore
+                      </button>
+                    </>
+                  )}
+                </>
+              )}
+            </div>
             <div
               className={cn(
                 "bg-[var(--surface)] border-2 border-border rounded-lg p-4 mb-3 max-h-[400px] overflow-y-auto whitespace-pre-wrap text-sm",
@@ -239,6 +326,7 @@ export function CompareCard({ queryId, query, runs, resultsByRun, onGrade, onOpe
               onClickTool={(i) => onOpenToolModal(r.id, i, run.label)}
             />
             <ReasoningDisplay reasoning={r.reasoning} />
+
           </div>
         );
       })}

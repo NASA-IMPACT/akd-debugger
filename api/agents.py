@@ -1,14 +1,26 @@
 import ast
 import json
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from starlette.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from executors.registry import get_executor
 from models.agent import AgentConfig
-from schemas.schemas import AgentCreate, AgentOut, AgentUpdate
+from models.trace_log import TraceLog
+from schemas.schemas import (
+    AgentChatRequest,
+    AgentChatResponse,
+    AgentCreate,
+    AgentOut,
+    AgentUpdate,
+    TraceLogOut,
+)
+from services.openai_pricing import calculate_cost
 
 router = APIRouter()
 
@@ -161,6 +173,64 @@ def parse_agent_code(code: str) -> dict:
     return result
 
 
+def _usage_to_dict(usage) -> dict | None:
+    if usage is None:
+        return None
+    try:
+        return {
+            "requests": getattr(usage, "requests", 1),
+            "input_tokens": getattr(usage, "input_tokens", 0),
+            "output_tokens": getattr(usage, "output_tokens", 0),
+            "total_tokens": getattr(usage, "total_tokens", 0),
+            "reasoning_tokens": getattr(
+                getattr(usage, "output_tokens_details", None), "reasoning_tokens", 0
+            ),
+            "cached_tokens": getattr(
+                getattr(usage, "input_tokens_details", None), "cached_tokens", 0
+            ),
+        }
+    except Exception:
+        return None
+
+
+def _trace_to_out(trace: TraceLog) -> TraceLogOut:
+    response_payload = (
+        trace.response_payload if isinstance(trace.response_payload, dict) else {}
+    )
+    tool_calls = response_payload.get("tool_calls")
+    breakdown = calculate_cost(trace.model or "", trace.usage or {}, tool_calls)
+    return TraceLogOut(
+        id=trace.id,
+        run_id=trace.run_id,
+        query_id=trace.query_id,
+        agent_config_id=trace.agent_config_id,
+        trace_type=trace.trace_type,
+        provider=trace.provider,
+        endpoint=trace.endpoint,
+        model=trace.model,
+        status=trace.status,
+        request_payload=trace.request_payload,
+        response_payload=trace.response_payload,
+        usage=trace.usage,
+        error=trace.error,
+        estimated_cost_usd=breakdown.total_usd,
+        cost_breakdown={
+            "input_cost_usd": breakdown.input_cost_usd,
+            "cached_input_cost_usd": breakdown.cached_input_cost_usd,
+            "output_cost_usd": breakdown.output_cost_usd,
+            "reasoning_output_cost_usd": breakdown.reasoning_output_cost_usd,
+            "web_search_cost_usd": breakdown.web_search_cost_usd,
+            "total_usd": breakdown.total_usd,
+            "web_search_calls": breakdown.web_search_calls,
+        },
+        missing_model_pricing=breakdown.missing_model_pricing,
+        latency_ms=trace.latency_ms,
+        started_at=trace.started_at,
+        completed_at=trace.completed_at,
+        created_at=trace.created_at,
+    )
+
+
 @router.post("/parse-code")
 async def parse_code(body: ParseCodeRequest):
     try:
@@ -187,6 +257,344 @@ async def create_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
     await db.commit()
     await db.refresh(agent)
     return AgentOut.model_validate(agent)
+
+
+@router.post("/{agent_id}/chat", response_model=AgentChatResponse)
+async def chat_with_agent(
+    agent_id: int, body: AgentChatRequest, db: AsyncSession = Depends(get_db)
+):
+    agent = await db.get(AgentConfig, agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    if not body.messages:
+        raise HTTPException(400, "messages cannot be empty")
+
+    executor = get_executor(agent.executor_type)
+    config = {
+        "system_prompt": agent.system_prompt,
+        "model": agent.model,
+        "tools_config": agent.tools_config,
+        "model_settings": agent.model_settings,
+    }
+
+    started_at = datetime.now(timezone.utc)
+    trace = TraceLog(
+        run_id=None,
+        query_id=None,
+        agent_config_id=agent.id,
+        trace_type="chat",
+        provider="openai",
+        endpoint="agents.chat.run",
+        model=agent.model,
+        status="started",
+        started_at=started_at,
+        request_payload={"messages": [m.model_dump() for m in body.messages]},
+    )
+    db.add(trace)
+    await db.flush()
+
+    exec_result = await executor.execute_chat(
+        [m.model_dump() for m in body.messages], config
+    )
+    completed_at = datetime.now(timezone.utc)
+    trace.completed_at = completed_at
+    trace.latency_ms = int((completed_at - started_at).total_seconds() * 1000)
+    trace.status = "failed" if exec_result.error else "completed"
+    trace.error = exec_result.error
+    trace.usage = exec_result.usage or None
+    trace.response_payload = {
+        "response": exec_result.response,
+        "tool_calls": exec_result.tool_calls,
+        "reasoning": exec_result.reasoning,
+    }
+    breakdown = calculate_cost(agent.model or "", exec_result.usage or {}, exec_result.tool_calls)
+    await db.commit()
+    await db.refresh(trace)
+    return AgentChatResponse(
+        assistant_message=exec_result.response if not exec_result.error else None,
+        tool_calls=exec_result.tool_calls or None,
+        reasoning=exec_result.reasoning or None,
+        usage=exec_result.usage or None,
+        estimated_cost_usd=breakdown.total_usd,
+        cost_breakdown={
+            "input_cost_usd": breakdown.input_cost_usd,
+            "cached_input_cost_usd": breakdown.cached_input_cost_usd,
+            "output_cost_usd": breakdown.output_cost_usd,
+            "reasoning_output_cost_usd": breakdown.reasoning_output_cost_usd,
+            "web_search_cost_usd": breakdown.web_search_cost_usd,
+            "total_usd": breakdown.total_usd,
+            "web_search_calls": breakdown.web_search_calls,
+        },
+        missing_model_pricing=breakdown.missing_model_pricing,
+        execution_time_seconds=exec_result.execution_time_seconds,
+        trace_log_id=trace.id,
+        error=exec_result.error,
+    )
+
+
+@router.post("/{agent_id}/chat/stream")
+async def chat_with_agent_stream(
+    agent_id: int, body: AgentChatRequest, db: AsyncSession = Depends(get_db)
+):
+    agent = await db.get(AgentConfig, agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    if not body.messages:
+        raise HTTPException(400, "messages cannot be empty")
+    if agent.executor_type != "openai_agents":
+        raise HTTPException(400, "Streaming chat is only supported for openai_agents")
+
+    from agents import (
+        Agent,
+        HostedMCPTool,
+        ModelSettings,
+        RunConfig,
+        Runner,
+        WebSearchTool,
+    )
+    from openai.types.shared.reasoning import Reasoning
+
+    tools = []
+    tc_raw = agent.tools_config
+    tc_list: list[dict] = []
+    if isinstance(tc_raw, list):
+        tc_list = tc_raw
+    elif isinstance(tc_raw, dict):
+        tc_list = [tc_raw]
+    for tc in tc_list:
+        if not isinstance(tc, dict):
+            continue
+        tool_type = tc.get("type")
+        if tool_type == "mcp":
+            tools.append(
+                HostedMCPTool(
+                    tool_config={
+                        "type": "mcp",
+                        "server_label": tc.get("server_label", "MCP Server"),
+                        "allowed_tools": tc.get("allowed_tools", []),
+                        "require_approval": "never",
+                        "server_url": tc.get("server_url", ""),
+                    }
+                )
+            )
+        elif tool_type == "web_search":
+            ws_kwargs: dict = {}
+            if tc.get("user_location"):
+                ws_kwargs["user_location"] = tc["user_location"]
+            if tc.get("search_context_size"):
+                ws_kwargs["search_context_size"] = tc["search_context_size"]
+            tools.append(WebSearchTool(**ws_kwargs))
+
+    ms_raw = agent.model_settings or {}
+    ms_kwargs = {}
+    if ms_raw.get("store") is not None:
+        ms_kwargs["store"] = ms_raw["store"]
+    if ms_raw.get("reasoning"):
+        r = ms_raw["reasoning"]
+        ms_kwargs["reasoning"] = Reasoning(
+            effort=r.get("effort", "medium"),
+            summary=r.get("summary", "auto"),
+        )
+    model_settings = ModelSettings(**ms_kwargs) if ms_kwargs else ModelSettings()
+    stream_agent = Agent(
+        name="Benchmark Agent",
+        instructions=agent.system_prompt or "",
+        model=agent.model,
+        tools=tools,
+        model_settings=model_settings,
+    )
+
+    conversation = []
+    for message in body.messages:
+        role = message.role
+        text = message.content
+        if not text.strip():
+            continue
+        content_type = "input_text" if role == "user" else "output_text"
+        conversation.append(
+            {"role": role, "content": [{"type": content_type, "text": text}]}
+        )
+    if not conversation:
+        raise HTTPException(400, "messages cannot be empty")
+
+    started_at = datetime.now(timezone.utc)
+    trace = TraceLog(
+        run_id=None,
+        query_id=None,
+        agent_config_id=agent.id,
+        trace_type="chat",
+        provider="openai",
+        endpoint="agents.chat.stream",
+        model=agent.model,
+        status="started",
+        started_at=started_at,
+        request_payload={"messages": [m.model_dump() for m in body.messages]},
+    )
+    db.add(trace)
+    await db.commit()
+    await db.refresh(trace)
+
+    async def event_stream():
+        full_text = ""
+        message_output_chunks: list[str] = []
+        reasoning_chunks: list[str] = []
+        tool_calls: list[dict] = []
+        usage_dict: dict | None = None
+        stream = Runner.run_streamed(
+            stream_agent,
+            input=conversation,
+            run_config=RunConfig(trace_metadata={"__trace_source__": "axiom"}),
+        )
+        try:
+            async for event in stream.stream_events():
+                if event.type == "raw_response_event":
+                    data = event.data
+                    dtype = getattr(data, "type", "")
+                    if dtype == "response.output_text.delta":
+                        delta = getattr(data, "delta", "")
+                        if delta:
+                            full_text += delta
+                            yield f"event: text_delta\ndata: {json.dumps({'delta': delta})}\n\n"
+                    elif dtype == "response.output_text.done":
+                        text_done = getattr(data, "text", "")
+                        if text_done:
+                            message_output_chunks.append(str(text_done))
+                    elif dtype == "response.reasoning_summary_text.delta":
+                        delta = getattr(data, "delta", "")
+                        if delta:
+                            reasoning_chunks.append(delta)
+                            yield f"event: reasoning_delta\ndata: {json.dumps({'delta': delta})}\n\n"
+                    elif dtype == "response.completed":
+                        response = getattr(data, "response", None)
+                        usage_dict = _usage_to_dict(getattr(response, "usage", None))
+
+                elif event.type == "run_item_stream_event":
+                    name = event.name
+                    if name == "message_output_created":
+                        item = event.item
+                        raw = getattr(item, "raw_item", None)
+                        content_items = getattr(raw, "content", None)
+                        if content_items:
+                            for c in content_items:
+                                ctype = getattr(c, "type", "")
+                                if ctype in ("output_text", "refusal"):
+                                    text_val = getattr(c, "text", None) or getattr(
+                                        c, "refusal", None
+                                    )
+                                    if text_val:
+                                        message_output_chunks.append(str(text_val))
+                    elif name == "reasoning_item_created":
+                        item = event.item
+                        raw = getattr(item, "raw_item", None)
+                        summary = getattr(raw, "summary", None)
+                        if summary:
+                            parts: list[str] = []
+                            for s in summary:
+                                text = getattr(s, "text", None)
+                                if text:
+                                    parts.append(str(text))
+                            if parts:
+                                yield f"event: reasoning_delta\ndata: {json.dumps({'delta': ''.join(parts)})}\n\n"
+                    elif name in ("tool_called", "tool_output"):
+                        item = event.item
+                        raw = getattr(item, "raw_item", None)
+                        entry = {
+                            "name": getattr(raw, "name", "tool"),
+                            "arguments": getattr(raw, "arguments", "{}"),
+                        }
+                        output = getattr(raw, "output", None)
+                        if output:
+                            entry["response"] = output
+                        if name == "tool_called":
+                            tool_calls.append(entry)
+                        elif name == "tool_output" and tool_calls:
+                            tool_calls[-1]["response"] = entry.get("response")
+                        yield f"event: tool_call\ndata: {json.dumps({'name': entry['name'], 'status': name})}\n\n"
+
+            final_text = (
+                stream.final_output_as(str)
+                or full_text
+                or "".join(message_output_chunks).strip()
+            )
+            if not final_text:
+                final_text = "No assistant text was returned."
+            if usage_dict is None:
+                usage_dict = {}
+            reasoning_payload = [{"summary": ["".join(reasoning_chunks)]}] if reasoning_chunks else []
+            breakdown = calculate_cost(agent.model or "", usage_dict, tool_calls)
+
+            completed_at = datetime.now(timezone.utc)
+            trace.completed_at = completed_at
+            trace.latency_ms = int((completed_at - started_at).total_seconds() * 1000)
+            trace.status = "completed"
+            trace.error = None
+            trace.usage = usage_dict or None
+            trace.response_payload = {
+                "response": final_text,
+                "tool_calls": tool_calls,
+                "reasoning": reasoning_payload,
+            }
+            await db.commit()
+
+            done_payload = {
+                "assistant_message": final_text,
+                "tool_calls": tool_calls,
+                "reasoning": reasoning_payload,
+                "usage": usage_dict,
+                "estimated_cost_usd": breakdown.total_usd,
+                "cost_breakdown": {
+                    "input_cost_usd": breakdown.input_cost_usd,
+                    "cached_input_cost_usd": breakdown.cached_input_cost_usd,
+                    "output_cost_usd": breakdown.output_cost_usd,
+                    "reasoning_output_cost_usd": breakdown.reasoning_output_cost_usd,
+                    "web_search_cost_usd": breakdown.web_search_cost_usd,
+                    "total_usd": breakdown.total_usd,
+                    "web_search_calls": breakdown.web_search_calls,
+                },
+                "missing_model_pricing": breakdown.missing_model_pricing,
+                "trace_log_id": trace.id,
+            }
+            yield f"event: done\ndata: {json.dumps(done_payload)}\n\n"
+        except Exception as exc:
+            completed_at = datetime.now(timezone.utc)
+            trace.completed_at = completed_at
+            trace.latency_ms = int((completed_at - started_at).total_seconds() * 1000)
+            trace.status = "failed"
+            trace.error = str(exc)
+            trace.response_payload = {
+                "response": full_text,
+                "tool_calls": tool_calls,
+                "reasoning": [{"summary": ["".join(reasoning_chunks)]}] if reasoning_chunks else [],
+            }
+            await db.commit()
+            yield f"event: error\ndata: {json.dumps({'error': str(exc), 'trace_log_id': trace.id})}\n\n"
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@router.get("/{agent_id}/traces", response_model=list[TraceLogOut])
+async def list_agent_traces(
+    agent_id: int,
+    status: str | None = None,
+    trace_type: str | None = None,
+    run_id: int | None = None,
+    limit: int = 200,
+    db: AsyncSession = Depends(get_db),
+):
+    agent = await db.get(AgentConfig, agent_id)
+    if not agent:
+        raise HTTPException(404, "Agent not found")
+    q = min(max(limit, 1), 1000)
+    stmt = select(TraceLog).where(TraceLog.agent_config_id == agent_id)
+    if status:
+        stmt = stmt.where(TraceLog.status == status)
+    if trace_type:
+        stmt = stmt.where(TraceLog.trace_type == trace_type)
+    if run_id is not None:
+        stmt = stmt.where(TraceLog.run_id == run_id)
+    stmt = stmt.order_by(TraceLog.created_at.desc()).limit(q)
+    rows = (await db.execute(stmt)).scalars().all()
+    return [_trace_to_out(trace) for trace in rows]
 
 
 @router.get("/{agent_id}", response_model=AgentOut)

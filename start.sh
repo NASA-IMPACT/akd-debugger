@@ -28,7 +28,7 @@ docker compose -f "$APP_DIR/docker-compose.yml" up -d db
 
 # Wait for healthy
 echo -n "Waiting for DB"
-until docker compose -f "$APP_DIR/docker-compose.yml" exec -T db pg_isready -U postgres -q 2>/dev/null; do
+until docker-compose -f "$APP_DIR/docker-compose.yml" exec -T db pg_isready -U postgres -q 2>/dev/null; do
     echo -n "."
     sleep 1
 done

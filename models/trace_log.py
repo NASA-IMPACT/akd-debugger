@@ -17,6 +17,9 @@ class TraceLog(Base):
     query_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("queries.id"), nullable=True, index=True
     )
+    agent_config_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("agent_configs.id"), nullable=True, index=True
+    )
     provider: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="openai"
     )
@@ -26,6 +29,9 @@ class TraceLog(Base):
     model: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     status: Mapped[str] = mapped_column(
         String(20), nullable=False, server_default="started", index=True
+    )
+    trace_type: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default="benchmark", index=True
     )
     request_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     response_payload: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
@@ -44,6 +50,9 @@ class TraceLog(Base):
 
     run: Mapped["Run | None"] = relationship("Run", back_populates="trace_logs")
     query: Mapped["Query | None"] = relationship("Query", back_populates="trace_logs")
+    agent_config: Mapped["AgentConfig | None"] = relationship(
+        "AgentConfig", back_populates="trace_logs"
+    )
     result: Mapped["Result | None"] = relationship(
         "Result", back_populates="trace_log", uselist=False
     )
