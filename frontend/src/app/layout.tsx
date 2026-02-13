@@ -5,6 +5,7 @@ import "./globals.css";
 import { QueryProvider } from "@/providers/query-provider";
 import { TagFilterProvider } from "@/providers/tag-filter-provider";
 import { Navbar } from "@/components/layout/navbar";
+import { ShortcutsModal } from "@/components/layout/shortcuts-modal";
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta" });
@@ -36,6 +37,7 @@ export default function RootLayout({
             <TagFilterProvider>
               <Navbar />
               <main className="max-w-[1400px] mx-auto px-4 py-4 md:p-6">{children}</main>
+              <ShortcutsModal />
             </TagFilterProvider>
           </Suspense>
         </QueryProvider>

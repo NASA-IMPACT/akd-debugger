@@ -82,7 +82,6 @@ export function GradingView(props: Props) {
     toolModalRef.current = v;
     _setToolModal(v);
   }, []);
-  const [showShortcuts, setShowShortcuts] = useState(false);
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const [lastFullyGradedQuery, setLastFullyGradedQuery] = useState<number | null>(null);
   const [activeQueryId, setActiveQueryId] = useState<number | null>(null);
@@ -315,20 +314,6 @@ export function GradingView(props: Props) {
     return () => window.removeEventListener("keydown", handleKey);
   }, [activeQueryId, isCompare, allResults, runIds, runs, singleSortedResults]);
 
-  // Keyboard shortcut: '?' shows shortcuts help
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
-      if (e.key === "?") {
-        setShowShortcuts((prev) => !prev);
-      }
-      if (e.key === "Escape" && showShortcuts) {
-        setShowShortcuts(false);
-      }
-    };
-    window.addEventListener("keydown", handleKey);
-    return () => window.removeEventListener("keydown", handleKey);
-  }, [showShortcuts]);
 
   const queryNavItems = useMemo(() => {
     if (isCompare) return buildQueryNavItems(compareQueryIds, allResults, runIds);
@@ -363,14 +348,45 @@ export function GradingView(props: Props) {
     return () => window.removeEventListener("keydown", handleKey);
   }, []);
 
-  // Keyboard shortcut: 'n' next query, 'p' previous query
+  // Keyboard shortcut: 'y' correct, 'p' partial, 'n' wrong — grade active query
+  useEffect(() => {
+    const gradeMap: Record<string, GradeValue> = { y: "correct", c: "correct", p: "partial", w: "wrong", n: "wrong" };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
+      const grade = gradeMap[e.key];
+      if (!grade || activeQueryId == null) return;
+
+      if (isCompare) {
+        const qResults = allResults[activeQueryId];
+        if (!qResults) return;
+        // Grade first ungraded run, or first run if all graded
+        for (const rid of runIds) {
+          const r = qResults[rid];
+          if (r && !r.grade?.grade) {
+            handleGrade(r.id, grade, activeQueryId);
+            return;
+          }
+        }
+        // All graded — re-grade the first run
+        const firstResult = qResults[runIds[0]];
+        if (firstResult) handleGrade(firstResult.id, grade, activeQueryId);
+      } else {
+        const r = singleSortedResults.find((res) => res.query_id === activeQueryId);
+        if (r) handleGrade(r.id, grade);
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [activeQueryId, isCompare, allResults, runIds, singleSortedResults, handleGrade]);
+
+  // Keyboard shortcut: 'k' next query, 'j' previous query
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLSelectElement) return;
-      if (e.key !== "n" && e.key !== "p") return;
+      if (e.key !== "k" && e.key !== "j") return;
       if (activeQueryId == null || queryIds.length === 0) return;
       const idx = queryIds.indexOf(activeQueryId);
-      const next = e.key === "n" ? idx + 1 : idx - 1;
+      const next = e.key === "k" ? idx + 1 : idx - 1;
       if (next >= 0 && next < queryIds.length) {
         handleNavNavigate(queryIds[next]);
       }
@@ -471,35 +487,6 @@ export function GradingView(props: Props) {
         />
       )}
 
-      {showShortcuts && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setShowShortcuts(false)}>
-          <div className="bg-card rounded-2xl border border-border shadow-2xl p-6 w-80" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-sm font-bold text-foreground">Keyboard Shortcuts</h3>
-              <button onClick={() => setShowShortcuts(false)} className="text-muted hover:text-foreground text-lg leading-none">&times;</button>
-            </div>
-            <div className="space-y-2 text-sm">
-              {[
-                ["n", "Next query"],
-                ["p", "Previous query"],
-                ["Tab", "Next agent tab"],
-                ["Shift+Tab", "Previous agent tab"],
-                ["Shift+Click", "Split compare view"],
-                ["t", "Toggle tool calls"],
-                ["m", "Toggle grade bar"],
-                [".", "Scroll to top"],
-                ["?", "Show shortcuts"],
-                ["Esc", "Close modal"],
-              ].map(([key, desc]) => (
-                <div key={key} className="flex items-center justify-between py-1">
-                  <span className="text-muted">{desc}</span>
-                  <kbd className="px-2 py-0.5 rounded bg-[var(--surface)] border border-border text-xs font-mono font-semibold text-foreground">{key}</kbd>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -495,12 +495,23 @@ function QueryCompareModal({
             : (prev + 1) % runs.length
         );
       }
-      if (e.key === "n") onNavigate(1);
-      if (e.key === "p") onNavigate(-1);
+      if (e.key === "k") onNavigate(1);
+      if (e.key === "j") onNavigate(-1);
+      if (e.key === "e") setEditMode((v) => !v);
+      if (e.key === "y" || e.key === "c" || e.key === "w" || e.key === "n" || e.key === "p") {
+        const gradeMap: Record<string, GradeValue> = { y: "correct", c: "correct", p: "partial", w: "wrong", n: "wrong" };
+        const grade = gradeMap[e.key];
+        if (grade) {
+          const activeRun = runs[activeTab];
+          if (activeRun && row.result_ids?.[activeRun.run_id]) {
+            onGrade(activeRun.run_id, grade);
+          }
+        }
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, runs.length, onNavigate]);
+  }, [onClose, runs, row, activeTab, onNavigate, onGrade]);
 
   return (
     <div
