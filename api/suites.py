@@ -19,6 +19,7 @@ from schemas.schemas import (
     SuiteOut,
     SuiteUpdate,
 )
+from services.db_utils import get_or_404
 
 router = APIRouter()
 
@@ -76,9 +77,7 @@ async def get_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
 async def update_suite(
     suite_id: int, body: SuiteUpdate, db: AsyncSession = Depends(get_db)
 ):
-    suite = await db.get(BenchmarkSuite, suite_id)
-    if not suite:
-        raise HTTPException(404, "Suite not found")
+    suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(suite, k, v)
     await db.commit()
@@ -96,9 +95,7 @@ async def update_suite(
 
 @router.delete("/{suite_id}", status_code=204)
 async def delete_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
-    suite = await db.get(BenchmarkSuite, suite_id)
-    if not suite:
-        raise HTTPException(404, "Suite not found")
+    suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
     await db.delete(suite)
     await db.commit()
 
@@ -107,9 +104,7 @@ async def delete_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
 async def add_query(
     suite_id: int, body: QueryCreate, db: AsyncSession = Depends(get_db)
 ):
-    suite = await db.get(BenchmarkSuite, suite_id)
-    if not suite:
-        raise HTTPException(404, "Suite not found")
+    suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
     max_ord = (
         await db.execute(
             select(func.coalesce(func.max(QueryModel.ordinal), 0)).where(
@@ -136,9 +131,7 @@ async def import_csv(
     suite_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
 ):
     """Import queries from CSV. Expected columns: id, tag, query, answer, comments."""
-    suite = await db.get(BenchmarkSuite, suite_id)
-    if not suite:
-        raise HTTPException(404, "Suite not found")
+    suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
 
     content = (await file.read()).decode("utf-8")
     reader = csv.reader(io.StringIO(content))
@@ -186,9 +179,7 @@ async def import_csv_mapped(
     mapping is a JSON string: {"query_text": "col", "expected_answer": "col", "tag": "col"|null, "comments": "col"|null}
     Unmapped columns are stored in metadata_.
     """
-    suite = await db.get(BenchmarkSuite, suite_id)
-    if not suite:
-        raise HTTPException(404, "Suite not found")
+    suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
 
     try:
         col_map = json.loads(mapping)

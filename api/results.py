@@ -13,6 +13,7 @@ from models.result import Result
 from models.run import Run
 from models.trace_log import TraceLog
 from schemas.schemas import ResultListOut, ResultOut
+from services.db_utils import get_or_404
 
 router = APIRouter()
 
@@ -124,9 +125,7 @@ async def retry_result(result_id: int, db: AsyncSession = Depends(get_db)):
 
     query = base.query
     if not query:
-        query = await db.get(Query, base.query_id)
-    if not query:
-        raise HTTPException(400, "Result query not found")
+        query = await get_or_404(db, Query, base.query_id, "Query")
 
     run = base.run
     agent = run.agent_config
@@ -246,9 +245,7 @@ async def delete_result_version(
         if not base:
             raise HTTPException(404, "Base result not found")
 
-    version = await db.get(Result, version_id)
-    if not version:
-        raise HTTPException(404, "Version not found")
+    version = await get_or_404(db, Result, version_id, "Version")
     version_base_id = _base_result_id(version)
     if version_base_id != base.id:
         raise HTTPException(400, "Version is not part of this result family")
