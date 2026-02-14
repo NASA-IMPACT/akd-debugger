@@ -33,6 +33,7 @@ from schemas.schemas import (
     RunOut,
 )
 from services.openai_pricing import calculate_cost, load_pricing
+from services.db_utils import get_or_404
 
 router = APIRouter()
 
@@ -47,12 +48,8 @@ def _normalize_output_dir(body: RunCreate) -> Path:
 async def _resolve_run_inputs(
     body: RunCreate, db: AsyncSession
 ) -> tuple[BenchmarkSuite, AgentConfig, list[Query], list[int]]:
-    suite = await db.get(BenchmarkSuite, body.suite_id)
-    if not suite:
-        raise HTTPException(404, "Suite not found")
-    agent = await db.get(AgentConfig, body.agent_config_id)
-    if not agent:
-        raise HTTPException(404, "Agent config not found")
+    suite = await get_or_404(db, BenchmarkSuite, body.suite_id, "Suite")
+    agent = await get_or_404(db, AgentConfig, body.agent_config_id, "Agent config")
 
     if body.query_ids:
         q_stmt = select(Query).where(
@@ -678,9 +675,7 @@ async def list_cost_previews(limit: int = 100, db: AsyncSession = Depends(get_db
 
 @router.get("/cost-preview/{preview_id}", response_model=RunCostPreviewRecordOut)
 async def get_cost_preview(preview_id: int, db: AsyncSession = Depends(get_db)):
-    preview = await db.get(RunCostPreview, preview_id)
-    if not preview:
-        raise HTTPException(404, "Cost preview not found")
+    preview = await get_or_404(db, RunCostPreview, preview_id, "Cost preview")
     agent = await db.get(AgentConfig, preview.agent_config_id)
     suite = await db.get(BenchmarkSuite, preview.suite_id)
     model = agent.model if agent else "unknown"

@@ -21,6 +21,8 @@ from schemas.schemas import (
     TraceLogOut,
 )
 from services.openai_pricing import calculate_cost
+from services.trace_utils import trace_to_out
+from services.db_utils import get_or_404
 
 router = APIRouter()
 
@@ -193,44 +195,6 @@ def _usage_to_dict(usage) -> dict | None:
         return None
 
 
-def _trace_to_out(trace: TraceLog) -> TraceLogOut:
-    response_payload = (
-        trace.response_payload if isinstance(trace.response_payload, dict) else {}
-    )
-    tool_calls = response_payload.get("tool_calls")
-    breakdown = calculate_cost(trace.model or "", trace.usage or {}, tool_calls)
-    return TraceLogOut(
-        id=trace.id,
-        run_id=trace.run_id,
-        query_id=trace.query_id,
-        agent_config_id=trace.agent_config_id,
-        trace_type=trace.trace_type,
-        provider=trace.provider,
-        endpoint=trace.endpoint,
-        model=trace.model,
-        status=trace.status,
-        request_payload=trace.request_payload,
-        response_payload=trace.response_payload,
-        usage=trace.usage,
-        error=trace.error,
-        estimated_cost_usd=breakdown.total_usd,
-        cost_breakdown={
-            "input_cost_usd": breakdown.input_cost_usd,
-            "cached_input_cost_usd": breakdown.cached_input_cost_usd,
-            "output_cost_usd": breakdown.output_cost_usd,
-            "reasoning_output_cost_usd": breakdown.reasoning_output_cost_usd,
-            "web_search_cost_usd": breakdown.web_search_cost_usd,
-            "total_usd": breakdown.total_usd,
-            "web_search_calls": breakdown.web_search_calls,
-        },
-        missing_model_pricing=breakdown.missing_model_pricing,
-        latency_ms=trace.latency_ms,
-        started_at=trace.started_at,
-        completed_at=trace.completed_at,
-        created_at=trace.created_at,
-    )
-
-
 @router.post("/parse-code")
 async def parse_code(body: ParseCodeRequest):
     try:
@@ -263,9 +227,7 @@ async def create_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
 async def chat_with_agent(
     agent_id: int, body: AgentChatRequest, db: AsyncSession = Depends(get_db)
 ):
-    agent = await db.get(AgentConfig, agent_id)
-    if not agent:
-        raise HTTPException(404, "Agent not found")
+    agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     if not body.messages:
         raise HTTPException(400, "messages cannot be empty")
 
@@ -336,9 +298,7 @@ async def chat_with_agent(
 async def chat_with_agent_stream(
     agent_id: int, body: AgentChatRequest, db: AsyncSession = Depends(get_db)
 ):
-    agent = await db.get(AgentConfig, agent_id)
-    if not agent:
-        raise HTTPException(404, "Agent not found")
+    agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     if not body.messages:
         raise HTTPException(400, "messages cannot be empty")
     if agent.executor_type != "openai_agents":
@@ -581,9 +541,7 @@ async def list_agent_traces(
     limit: int = 200,
     db: AsyncSession = Depends(get_db),
 ):
-    agent = await db.get(AgentConfig, agent_id)
-    if not agent:
-        raise HTTPException(404, "Agent not found")
+    agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     q = min(max(limit, 1), 1000)
     stmt = select(TraceLog).where(TraceLog.agent_config_id == agent_id)
     if status:
@@ -594,14 +552,12 @@ async def list_agent_traces(
         stmt = stmt.where(TraceLog.run_id == run_id)
     stmt = stmt.order_by(TraceLog.created_at.desc()).limit(q)
     rows = (await db.execute(stmt)).scalars().all()
-    return [_trace_to_out(trace) for trace in rows]
+    return [trace_to_out(trace) for trace in rows]
 
 
 @router.get("/{agent_id}", response_model=AgentOut)
 async def get_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
-    agent = await db.get(AgentConfig, agent_id)
-    if not agent:
-        raise HTTPException(404, "Agent not found")
+    agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     return AgentOut.model_validate(agent)
 
 
@@ -609,9 +565,7 @@ async def get_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
 async def update_agent(
     agent_id: int, body: AgentUpdate, db: AsyncSession = Depends(get_db)
 ):
-    agent = await db.get(AgentConfig, agent_id)
-    if not agent:
-        raise HTTPException(404, "Agent not found")
+    agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(agent, k, v)
     await db.commit()
@@ -621,8 +575,6 @@ async def update_agent(
 
 @router.delete("/{agent_id}", status_code=204)
 async def delete_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
-    agent = await db.get(AgentConfig, agent_id)
-    if not agent:
-        raise HTTPException(404, "Agent not found")
+    agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     await db.delete(agent)
     await db.commit()

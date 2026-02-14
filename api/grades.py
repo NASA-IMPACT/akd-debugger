@@ -11,6 +11,7 @@ from database import get_db
 from models.grade import Grade
 from models.result import Result
 from schemas.schemas import GradeCreate, GradeOut
+from services.db_utils import get_or_404
 
 router = APIRouter()
 
@@ -19,9 +20,7 @@ router = APIRouter()
 async def upsert_grade(
     result_id: int, body: GradeCreate, db: AsyncSession = Depends(get_db)
 ):
-    result = await db.get(Result, result_id)
-    if not result:
-        raise HTTPException(404, "Result not found")
+    result = await get_or_404(db, Result, result_id, "Result")
     if body.grade not in ("correct", "partial", "wrong"):
         raise HTTPException(400, "Grade must be correct, partial, or wrong")
 

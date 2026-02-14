@@ -10,15 +10,14 @@ from models.result import Result
 from models.run import Run
 from schemas.schemas import CompareAnalyticsOut, RunAnalyticsOut
 from services.analytics import compute_compare_analytics, compute_run_analytics
+from services.db_utils import get_or_404
 
 router = APIRouter()
 
 
 @router.get("/runs/{run_id}", response_model=RunAnalyticsOut)
 async def run_analytics(run_id: int, db: AsyncSession = Depends(get_db)):
-    run = await db.get(Run, run_id)
-    if not run:
-        raise HTTPException(404, "Run not found")
+    run = await get_or_404(db, Run, run_id, "Run")
     return await compute_run_analytics(run_id, db)
 
 
