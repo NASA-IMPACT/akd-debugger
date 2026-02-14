@@ -7,6 +7,7 @@ from database import get_db
 from models.comparison import Comparison, comparison_runs
 from models.run import Run
 from schemas.schemas import ComparisonCreate, ComparisonOut
+from services.db_utils import get_or_404
 
 router = APIRouter()
 
@@ -106,8 +107,6 @@ async def get_comparison(comparison_id: int, db: AsyncSession = Depends(get_db))
 
 @router.delete("/{comparison_id}", status_code=204)
 async def delete_comparison(comparison_id: int, db: AsyncSession = Depends(get_db)):
-    comp = await db.get(Comparison, comparison_id)
-    if not comp:
-        raise HTTPException(404, "Comparison not found")
+    comp = await get_or_404(db, Comparison, comparison_id, "Comparison")
     await db.delete(comp)
     await db.commit()
