@@ -9,7 +9,9 @@ def trace_to_out(trace: TraceLog) -> TraceLogOut:
     """Convert a TraceLog model to TraceLogOut schema with cost calculations.
     
     Args:
-        trace: TraceLog model instance
+        trace: TraceLog model instance. The response_payload may be None or a 
+               non-dict value; in such cases it defaults to an empty dict for 
+               safe processing.
         
     Returns:
         TraceLogOut schema with calculated costs and breakdown

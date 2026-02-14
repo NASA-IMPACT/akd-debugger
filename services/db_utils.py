@@ -19,13 +19,14 @@ async def get_or_404(
         db: Database session
         model: SQLAlchemy model class
         id: Primary key ID to fetch
-        name: Optional custom name for error message (defaults to model name)
+        name: Optional custom name for error message. If None, uses the model's 
+              class name (e.g., "AgentConfig" becomes "AgentConfig not found").
         
     Returns:
         Model instance
         
     Raises:
-        HTTPException: 404 if not found
+        HTTPException: 404 if not found, with message "{name} not found"
     """
     obj = await db.get(model, id)
     if not obj:
