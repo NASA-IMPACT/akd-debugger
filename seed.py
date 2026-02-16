@@ -11,6 +11,8 @@ from sqlalchemy import select
 
 from database import async_session
 from models.agent import AgentConfig
+from models.organization import Organization
+from models.project import Project
 from models.query import Query
 from models.suite import BenchmarkSuite
 
@@ -61,6 +63,21 @@ ASTRO_MODEL_SETTINGS = {
 
 async def seed():
     async with async_session() as db:
+        bootstrap_org = (
+            await db.execute(
+                select(Organization).where(Organization.is_bootstrap.is_(True))
+            )
+        ).scalar_one_or_none()
+        if not bootstrap_org:
+            raise RuntimeError("Bootstrap organization not found. Run migrations first.")
+        bootstrap_project = (
+            await db.execute(
+                select(Project).where(Project.organization_id == bootstrap_org.id).order_by(Project.id.asc()).limit(1)
+            )
+        ).scalar_one_or_none()
+        if not bootstrap_project:
+            raise RuntimeError("Bootstrap project not found. Run migrations first.")
+
         # Check if already seeded
         existing = (
             await db.execute(
@@ -72,9 +89,12 @@ async def seed():
             print("Astro Gold v1 suite already exists, skipping.")
         else:
             suite = BenchmarkSuite(
+                organization_id=bootstrap_org.id,
+                project_id=bootstrap_project.id,
                 name="Astro Gold v1",
                 description="Gold standard benchmark for astrophysics dataset discovery agent",
                 tags=["astro-team"],
+                visibility_scope="project",
             )
             db.add(suite)
             await db.commit()
@@ -119,6 +139,8 @@ async def seed():
             print("GPT-5.2 CARE Agent already exists, skipping.")
         else:
             agent = AgentConfig(
+                organization_id=bootstrap_org.id,
+                project_id=bootstrap_project.id,
                 name="GPT-5.2 CARE Agent",
                 executor_type="openai_agents",
                 model="gpt-5.2",
@@ -126,6 +148,7 @@ async def seed():
                 tools_config=ASTRO_TOOLS_CONFIG,
                 model_settings=ASTRO_MODEL_SETTINGS,
                 tags=["astro-team"],
+                visibility_scope="project",
             )
             db.add(agent)
             await db.commit()

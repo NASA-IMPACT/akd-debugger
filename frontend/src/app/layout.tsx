@@ -1,16 +1,23 @@
 import type { Metadata } from "next";
-import { Inter, Plus_Jakarta_Sans, JetBrains_Mono, Roboto_Condensed } from "next/font/google";
+import { Space_Grotesk, Manrope, IBM_Plex_Mono } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
+import { AuthProvider } from "@/providers/auth-provider";
 import { QueryProvider } from "@/providers/query-provider";
 import { TagFilterProvider } from "@/providers/tag-filter-provider";
+import { WorkspaceProvider } from "@/providers/workspace-provider";
+import { AuthGate } from "@/components/layout/auth-gate";
 import { Navbar } from "@/components/layout/navbar";
+import { CommandPalette } from "@/components/layout/command-palette";
 import { ShortcutsModal } from "@/components/layout/shortcuts-modal";
 
-const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
-const jakarta = Plus_Jakarta_Sans({ subsets: ["latin"], variable: "--font-jakarta" });
-const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" });
-const robotoCondensed = Roboto_Condensed({ subsets: ["latin"], variable: "--font-roboto-condensed" });
+const spaceGrotesk = Space_Grotesk({ subsets: ["latin"], variable: "--font-space-grotesk" });
+const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope" });
+const ibmPlexMono = IBM_Plex_Mono({
+  subsets: ["latin"],
+  variable: "--font-ibm-plex-mono",
+  weight: ["400", "500", "600"],
+});
 
 export const metadata: Metadata = {
   title: "Axiom",
@@ -23,7 +30,11 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${inter.variable} ${jakarta.variable} ${jetbrainsMono.variable} ${robotoCondensed.variable}`} suppressHydrationWarning>
+    <html
+      lang="en"
+      className={`${spaceGrotesk.variable} ${manrope.variable} ${ibmPlexMono.variable}`}
+      suppressHydrationWarning
+    >
       <head>
         <script
           dangerouslySetInnerHTML={{
@@ -32,15 +43,24 @@ export default function RootLayout({
         />
       </head>
       <body className="antialiased font-sans">
-        <QueryProvider>
-          <Suspense>
-            <TagFilterProvider>
-              <Navbar />
-              <main className="max-w-[1400px] mx-auto px-4 py-4 md:p-6">{children}</main>
-              <ShortcutsModal />
-            </TagFilterProvider>
-          </Suspense>
-        </QueryProvider>
+        <AuthProvider>
+          <WorkspaceProvider>
+            <QueryProvider>
+              <Suspense>
+                <AuthGate>
+                  <TagFilterProvider>
+                    <Navbar />
+                    <main className="app-main">
+                      <div className="app-content">{children}</div>
+                    </main>
+                    <CommandPalette />
+                    <ShortcutsModal />
+                  </TagFilterProvider>
+                </AuthGate>
+              </Suspense>
+            </QueryProvider>
+          </WorkspaceProvider>
+        </AuthProvider>
       </body>
     </html>
   );

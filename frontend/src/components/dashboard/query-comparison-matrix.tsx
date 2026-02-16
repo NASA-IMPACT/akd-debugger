@@ -94,7 +94,7 @@ export function QueryComparisonMatrix({ runs, queryGrades }: Props) {
 
   return (
     <>
-      <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+      <div className="bg-card rounded-lg p-6 px-8 mb-6">
         <h2 className="text-lg font-semibold mb-4 pb-2 border-b-2 border-border text-brand-dark">
           Query Comparison Matrix
         </h2>
@@ -312,13 +312,13 @@ function RunPanel({
               {activeVersion && !activeVersion.is_default_version && baseResultId && (
                 <>
                   <button
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--tag-green-bg)] text-[var(--tag-green-text)]"
+                    className="px-2.5 py-1 rounded text-xs font-medium bg-[var(--tag-green-bg)] text-[var(--tag-green-text)]"
                     onClick={() => onAcceptVersion?.(baseResultId, activeVersion.id)}
                   >
                     Set default
                   </button>
                   <button
-                    className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--tag-orange-bg)] text-[var(--tag-orange-text)]"
+                    className="px-2.5 py-1 rounded text-xs font-medium bg-[var(--tag-orange-bg)] text-[var(--tag-orange-text)]"
                     onClick={() => {
                       const ok = window.confirm("This version will be deleted. Do you really want to continue?");
                       if (!ok) return;
@@ -434,7 +434,7 @@ function AgentDropdown({
     <div ref={ref} className="relative mb-3">
       <button
         type="button"
-        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-[var(--surface)] text-sm font-semibold hover:bg-[var(--surface-hover)] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-[var(--surface)] text-sm font-medium hover:bg-[var(--surface-hover)] transition-colors"
         onClick={() => setOpen((v) => !v)}
       >
         <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColors[selectedGrade])} />
@@ -519,7 +519,7 @@ function SplitPanel({
             type="button"
             className={cn(
               "px-3 py-1 rounded text-xs font-semibold transition-colors",
-              viewMode === "responses" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground"
+              viewMode === "responses" ? "bg-[var(--surface-hover)] text-foreground" : "text-muted hover:text-foreground"
             )}
             onClick={() => setViewMode("responses")}
           >
@@ -529,7 +529,7 @@ function SplitPanel({
             type="button"
             className={cn(
               "px-3 py-1 rounded text-xs font-semibold transition-colors",
-              viewMode === "traces" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground"
+              viewMode === "traces" ? "bg-[var(--surface-hover)] text-foreground" : "text-muted hover:text-foreground"
             )}
             onClick={() => setViewMode("traces")}
           >

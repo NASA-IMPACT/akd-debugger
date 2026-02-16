@@ -31,7 +31,7 @@ export default function CompareListPage() {
       <PageHeader title="Comparisons" />
 
       {isLoading ? (
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
           {[...Array(3)].map((_, i) => (
             <div key={i} className="flex items-center gap-4 py-4 px-5 border-b border-border last:border-b-0">
               <div className="skeleton h-5 w-52" />
@@ -41,7 +41,7 @@ export default function CompareListPage() {
           ))}
         </div>
       ) : comparisons.length === 0 ? (
-        <div className="bg-card rounded-xl border border-border shadow-sm py-20 text-center">
+        <div className="bg-card rounded-lg border border-border py-16 text-center">
           <Inbox size={40} className="mx-auto text-muted-light mb-3" />
           <p className="text-muted text-sm">
             No saved comparisons yet. Select runs from the{" "}
@@ -50,7 +50,7 @@ export default function CompareListPage() {
           </p>
         </div>
       ) : (
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-[var(--surface-hover)] border-b border-border">
@@ -95,7 +95,7 @@ export default function CompareListPage() {
       {/* Delete confirmation modal */}
       {deleteId !== null && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop" onClick={(e) => e.target === e.currentTarget && setDeleteId(null)}>
-          <div className="bg-card border border-border rounded-2xl w-[420px] p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[420px] p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-foreground">Delete Comparison</h3>
               <button className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setDeleteId(null)}>
@@ -106,9 +106,9 @@ export default function CompareListPage() {
               Delete this comparison? The underlying runs and grades will not be affected.
             </p>
             <div className="flex justify-end gap-3 mt-6">
-              <button className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setDeleteId(null)}>Cancel</button>
+              <button className="px-3.5 py-1.5 rounded-md font-medium text-[13px] bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setDeleteId(null)}>Cancel</button>
               <button
-                className="px-4 py-2 bg-destructive text-white rounded-xl font-medium text-sm shadow-lg shadow-destructive/25 hover:brightness-110 hover:-translate-y-px transition-all"
+                className="px-4 py-2 bg-destructive text-white rounded-md font-medium text-sm hover:brightness-110 transition-colors"
                 onClick={() => deleteMutation.mutate(deleteId)}
               >
                 {deleteMutation.isPending ? "Deleting..." : "Delete"}

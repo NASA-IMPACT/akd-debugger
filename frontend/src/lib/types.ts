@@ -20,6 +20,10 @@ export interface CsvColumnMapping {
 
 export interface SuiteOut {
   id: number;
+  organization_id: number;
+  project_id: number;
+  created_by_user_id: number | null;
+  visibility_scope: "project" | "organization";
   name: string;
   description: string | null;
   tags: string[];
@@ -36,12 +40,14 @@ export interface SuiteCreate {
   name: string;
   description?: string | null;
   tags?: string[];
+  visibility_scope?: "project" | "organization";
 }
 
 export interface SuiteUpdate {
   name?: string | null;
   description?: string | null;
   tags?: string[] | null;
+  visibility_scope?: "project" | "organization" | null;
 }
 
 export interface QueryCreate {
@@ -53,6 +59,10 @@ export interface QueryCreate {
 
 export interface AgentOut {
   id: number;
+  organization_id: number;
+  project_id: number;
+  created_by_user_id: number | null;
+  visibility_scope: "project" | "organization";
   name: string;
   executor_type: string;
   model: string;
@@ -73,6 +83,7 @@ export interface AgentCreate {
   tools_config?: Record<string, unknown> | null;
   model_settings?: Record<string, unknown> | null;
   tags?: string[];
+  visibility_scope?: "project" | "organization";
 }
 
 export interface AgentUpdate {
@@ -84,10 +95,15 @@ export interface AgentUpdate {
   tools_config?: Record<string, unknown> | null;
   model_settings?: Record<string, unknown> | null;
   tags?: string[] | null;
+  visibility_scope?: "project" | "organization" | null;
 }
 
 export interface RunOut {
   id: number;
+  organization_id: number;
+  project_id: number;
+  created_by_user_id: number | null;
+  visibility_scope: "project" | "organization";
   suite_id: number;
   agent_config_id: number;
   label: string;
@@ -119,10 +135,15 @@ export interface RunCreate {
   query_ids?: number[] | null;
   output_dir?: string | null;
   repeat?: number;
+  visibility_scope?: "project" | "organization";
 }
 
 export interface RunCostPreviewOut {
   id: number;
+  organization_id: number;
+  project_id: number;
+  created_by_user_id: number | null;
+  visibility_scope: "project" | "organization";
   suite_id: number;
   suite_name: string;
   agent_config_id: number;
@@ -179,6 +200,10 @@ export interface GradeCreate {
 
 export interface ResultOut {
   id: number;
+  organization_id: number;
+  project_id: number;
+  created_by_user_id: number | null;
+  visibility_scope: "project" | "organization";
   run_id: number;
   query_id: number;
   parent_result_id: number | null;
@@ -382,6 +407,10 @@ export type GradeValue = "correct" | "partial" | "wrong";
 // Comparisons
 export interface ComparisonOut {
   id: number;
+  organization_id: number;
+  project_id: number;
+  created_by_user_id: number | null;
+  visibility_scope: "project" | "organization";
   name: string | null;
   suite_id: number;
   suite_name: string;
@@ -399,6 +428,9 @@ export interface ComparisonCreate {
 // Tracing
 export interface TraceLogOut {
   id: number;
+  organization_id: number;
+  project_id: number;
+  created_by_user_id: number | null;
   run_id: number | null;
   query_id: number | null;
   agent_config_id: number | null;
@@ -428,10 +460,143 @@ export interface TraceSummaryOut {
 
 export interface AppNotificationOut {
   id: number;
+  organization_id: number;
+  project_id: number | null;
+  user_id: number | null;
   notif_type: string;
   title: string;
   message: string;
   related_id: number | null;
   is_read: boolean;
+  created_at: string;
+}
+
+export interface UserOut {
+  id: number;
+  full_name: string;
+  email: string;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface OrganizationOut {
+  id: number;
+  name: string;
+  slug: string;
+  is_personal: boolean;
+  is_bootstrap: boolean;
+  owner_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProjectOut {
+  id: number;
+  organization_id: number;
+  name: string;
+  description: string | null;
+  is_archived: boolean;
+  created_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuthSessionOut {
+  user: UserOut;
+  organizations: OrganizationOut[];
+  active_organization_id: number | null;
+}
+
+export interface AuthSignupIn {
+  full_name: string;
+  email: string;
+  password: string;
+  invitation_token?: string | null;
+}
+
+export interface AuthLoginIn {
+  email: string;
+  password: string;
+}
+
+export interface AuthPasswordForgotIn {
+  email: string;
+}
+
+export interface AuthPasswordResetIn {
+  token: string;
+  password: string;
+}
+
+export interface MembershipOut {
+  id: number;
+  organization_id: number;
+  user_id: number;
+  user_full_name?: string | null;
+  user_email?: string | null;
+  role_id: number | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface ProjectMembershipOut {
+  id: number;
+  organization_id: number;
+  project_id: number;
+  user_id: number;
+  user_full_name?: string | null;
+  user_email?: string | null;
+  role_id: number | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface InvitationProjectAssignment {
+  project_id: number;
+  role_id?: number | null;
+}
+
+export interface InvitationOut {
+  id: number;
+  organization_id: number;
+  email: string;
+  invited_by_user_id: number | null;
+  org_role_id: number | null;
+  project_assignments: InvitationProjectAssignment[];
+  expires_at: string;
+  accepted_at: string | null;
+  revoked_at: string | null;
+  created_at: string;
+  invite_link?: string | null;
+}
+
+export interface RoleOut {
+  id: number;
+  organization_id: number;
+  name: string;
+  slug: string;
+  is_builtin: boolean;
+  created_at: string;
+}
+
+export interface PermissionOut {
+  id: number;
+  key: string;
+  resource: string;
+  action: string;
+  description: string | null;
+}
+
+export interface UserPermissionGrantOut {
+  id: number;
+  organization_id: number;
+  project_id: number | null;
+  user_id: number;
+  permission_id: number;
+  effect: "allow" | "deny";
+  resource_type: string | null;
+  resource_id: number | null;
+  granted_by_user_id: number | null;
+  expires_at: string | null;
   created_at: string;
 }

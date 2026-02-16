@@ -23,6 +23,9 @@ from schemas.schemas import (
 from services.openai_pricing import calculate_cost
 from services.trace_utils import trace_to_out
 from services.db_utils import get_or_404
+from services.context import get_request_context
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter, assign_workspace_fields
 
 router = APIRouter()
 
@@ -206,7 +209,10 @@ async def parse_code(body: ParseCodeRequest):
 
 @router.get("", response_model=list[AgentOut])
 async def list_agents(tag: str | None = None, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.read")
     stmt = select(AgentConfig)
+    stmt = apply_workspace_filter(stmt, AgentConfig, ctx)
     if tag:
         stmt = stmt.where(AgentConfig.tags.overlap([tag]))
     stmt = stmt.order_by(AgentConfig.created_at.desc())
@@ -216,7 +222,10 @@ async def list_agents(tag: str | None = None, db: AsyncSession = Depends(get_db)
 
 @router.post("", response_model=AgentOut, status_code=201)
 async def create_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.write")
     agent = AgentConfig(**body.model_dump())
+    assign_workspace_fields(agent, ctx)
     db.add(agent)
     await db.commit()
     await db.refresh(agent)
@@ -227,6 +236,8 @@ async def create_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
 async def chat_with_agent(
     agent_id: int, body: AgentChatRequest, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.read")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     if not body.messages:
         raise HTTPException(400, "messages cannot be empty")
@@ -241,6 +252,9 @@ async def chat_with_agent(
 
     started_at = datetime.now(timezone.utc)
     trace = TraceLog(
+        organization_id=ctx.organization_id,
+        project_id=ctx.project_id,
+        created_by_user_id=ctx.user.id,
         run_id=None,
         query_id=None,
         agent_config_id=agent.id,
@@ -298,6 +312,8 @@ async def chat_with_agent(
 async def chat_with_agent_stream(
     agent_id: int, body: AgentChatRequest, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.read")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     if not body.messages:
         raise HTTPException(400, "messages cannot be empty")
@@ -379,6 +395,9 @@ async def chat_with_agent_stream(
 
     started_at = datetime.now(timezone.utc)
     trace = TraceLog(
+        organization_id=ctx.organization_id,
+        project_id=ctx.project_id,
+        created_by_user_id=ctx.user.id,
         run_id=None,
         query_id=None,
         agent_config_id=agent.id,
@@ -541,9 +560,12 @@ async def list_agent_traces(
     limit: int = 200,
     db: AsyncSession = Depends(get_db),
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "traces.read")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     q = min(max(limit, 1), 1000)
     stmt = select(TraceLog).where(TraceLog.agent_config_id == agent_id)
+    stmt = apply_workspace_filter(stmt, TraceLog, ctx)
     if status:
         stmt = stmt.where(TraceLog.status == status)
     if trace_type:
@@ -557,6 +579,8 @@ async def list_agent_traces(
 
 @router.get("/{agent_id}", response_model=AgentOut)
 async def get_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.read")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     return AgentOut.model_validate(agent)
 
@@ -565,6 +589,8 @@ async def get_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
 async def update_agent(
     agent_id: int, body: AgentUpdate, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.write")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(agent, k, v)
@@ -575,6 +601,8 @@ async def update_agent(
 
 @router.delete("/{agent_id}", status_code=204)
 async def delete_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.delete")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     await db.delete(agent)
     await db.commit()

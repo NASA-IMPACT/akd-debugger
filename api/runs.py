@@ -34,6 +34,9 @@ from schemas.schemas import (
 )
 from services.openai_pricing import calculate_cost, load_pricing
 from services.db_utils import get_or_404
+from services.context import get_request_context
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter, assign_workspace_fields
 
 router = APIRouter()
 
@@ -48,8 +51,24 @@ def _normalize_output_dir(body: RunCreate) -> Path:
 async def _resolve_run_inputs(
     body: RunCreate, db: AsyncSession
 ) -> tuple[BenchmarkSuite, AgentConfig, list[Query], list[int]]:
-    suite = await get_or_404(db, BenchmarkSuite, body.suite_id, "Suite")
-    agent = await get_or_404(db, AgentConfig, body.agent_config_id, "Agent config")
+    ctx = get_request_context()
+    suite_stmt = apply_workspace_filter(
+        select(BenchmarkSuite).where(BenchmarkSuite.id == body.suite_id),
+        BenchmarkSuite,
+        ctx,
+    )
+    suite = (await db.execute(suite_stmt)).scalar_one_or_none()
+    if suite is None:
+        raise HTTPException(404, "Suite not found")
+
+    agent_stmt = apply_workspace_filter(
+        select(AgentConfig).where(AgentConfig.id == body.agent_config_id),
+        AgentConfig,
+        ctx,
+    )
+    agent = (await db.execute(agent_stmt)).scalar_one_or_none()
+    if agent is None:
+        raise HTTPException(404, "Agent config not found")
 
     if body.query_ids:
         q_stmt = select(Query).where(
@@ -70,6 +89,7 @@ async def _create_runs(
     query_count: int,
     db: AsyncSession,
 ) -> list[Run]:
+    ctx = get_request_context()
     repeat = max(1, body.repeat)
     run_group = str(uuid.uuid4())[:12] if repeat > 1 else None
     base_dir = _normalize_output_dir(body)
@@ -95,7 +115,9 @@ async def _create_runs(
             run_group=run_group,
             run_number=run_num,
             status="pending",
+            visibility_scope=body.visibility_scope,
         )
+        assign_workspace_fields(run, ctx)
         db.add(run)
         await db.commit()
         await db.refresh(run)
@@ -109,6 +131,7 @@ async def _create_runs(
 async def _build_preview(
     body: RunCreate, db: AsyncSession, preview: RunCostPreview | None = None
 ) -> RunCostPreviewOut:
+    ctx = get_request_context()
     suite, agent, queries, query_ids = await _resolve_run_inputs(body, db)
     if agent.executor_type != "openai_agents":
         raise HTTPException(
@@ -166,6 +189,9 @@ async def _build_preview(
         if isinstance(item, Exception):
             usage_totals["errors"] += 1
             trace = TraceLog(
+                organization_id=ctx.organization_id,
+                project_id=ctx.project_id,
+                created_by_user_id=ctx.user.id,
                 run_id=None,
                 query_id=q.id,
                 agent_config_id=agent.id,
@@ -244,6 +270,9 @@ async def _build_preview(
             }
         )
         trace = TraceLog(
+            organization_id=ctx.organization_id,
+            project_id=ctx.project_id,
+            created_by_user_id=ctx.user.id,
             run_id=None,
             query_id=q.id,
             agent_config_id=agent.id,
@@ -280,6 +309,10 @@ async def _build_preview(
     pricing = load_pricing()
 
     record = preview or RunCostPreview(
+        organization_id=ctx.organization_id,
+        project_id=ctx.project_id,
+        created_by_user_id=ctx.user.id,
+        visibility_scope=body.visibility_scope,
         suite_id=body.suite_id,
         agent_config_id=body.agent_config_id,
         label=body.label,
@@ -318,6 +351,10 @@ async def _build_preview(
 
     return RunCostPreviewOut(
         id=record.id,
+        organization_id=record.organization_id,
+        project_id=record.project_id,
+        created_by_user_id=record.created_by_user_id,
+        visibility_scope=record.visibility_scope,
         suite_id=record.suite_id,
         suite_name=suite.name,
         agent_config_id=record.agent_config_id,
@@ -345,6 +382,9 @@ async def _build_preview(
 async def _create_notification(
     db: AsyncSession,
     *,
+    organization_id: int,
+    project_id: int | None = None,
+    user_id: int | None = None,
     notif_type: str,
     title: str,
     message: str,
@@ -352,6 +392,9 @@ async def _create_notification(
 ):
     db.add(
         AppNotification(
+            organization_id=organization_id,
+            project_id=project_id,
+            user_id=user_id,
             notif_type=notif_type,
             title=title,
             message=message,
@@ -380,11 +423,14 @@ async def _start_cost_preview_job(preview_id: int, mark_running: bool = True):
             query_ids=preview.query_ids,
             output_dir=preview.output_dir,
             repeat=preview.repeat,
+            visibility_scope=preview.visibility_scope,
         )
         try:
             await _build_preview(body, db, preview=preview)
             await _create_notification(
                 db,
+                organization_id=preview.organization_id,
+                project_id=preview.project_id,
                 notif_type="cost_preview_completed",
                 title="Cost preview completed",
                 message=f"Cost preview #{preview_id} for '{preview.label}' is ready.",
@@ -397,6 +443,8 @@ async def _start_cost_preview_job(preview_id: int, mark_running: bool = True):
             await db.commit()
             await _create_notification(
                 db,
+                organization_id=preview.organization_id,
+                project_id=preview.project_id,
                 notif_type="cost_preview_failed",
                 title="Cost preview failed",
                 message=f"Cost preview #{preview_id} failed: {exc}",
@@ -405,6 +453,7 @@ async def _start_cost_preview_job(preview_id: int, mark_running: bool = True):
 
 
 async def _enqueue_pending_previews(db: AsyncSession):
+    ctx = get_request_context()
     now = datetime.now(timezone.utc)
     stale_running_cutoff = now.timestamp() - (15 * 60)
 
@@ -418,6 +467,7 @@ async def _enqueue_pending_previews(db: AsyncSession):
         .order_by(RunCostPreview.started_at.asc())
         .limit(20)
     )
+    stale_running_stmt = apply_workspace_filter(stale_running_stmt, RunCostPreview, ctx)
     stale_running = (await db.execute(stale_running_stmt)).scalars().all()
     for p in stale_running:
         started = p.started_at
@@ -431,6 +481,7 @@ async def _enqueue_pending_previews(db: AsyncSession):
         .order_by(RunCostPreview.created_at.asc())
         .limit(20)
     )
+    pending_stmt = apply_workspace_filter(pending_stmt, RunCostPreview, ctx)
     pending = (await db.execute(pending_stmt)).scalars().all()
     if not pending:
         if stale_running:
@@ -459,6 +510,10 @@ def _preview_record_out(
     per_query_costs = usage.get("per_query_costs") or []
     return RunCostPreviewRecordOut(
         id=preview.id,
+        organization_id=preview.organization_id,
+        project_id=preview.project_id,
+        created_by_user_id=preview.created_by_user_id,
+        visibility_scope=preview.visibility_scope,
         suite_id=preview.suite_id,
         suite_name=suite_name,
         agent_config_id=preview.agent_config_id,
@@ -491,7 +546,10 @@ def _preview_record_out(
 
 @router.get("", response_model=list[RunDetailOut])
 async def list_runs(tag: str | None = None, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.read")
     stmt = select(Run).options(selectinload(Run.suite), selectinload(Run.agent_config))
+    stmt = apply_workspace_filter(stmt, Run, ctx)
     if tag:
         stmt = stmt.where(Run.tags.overlap([tag]))
     stmt = stmt.order_by(Run.created_at.desc())
@@ -508,12 +566,15 @@ async def list_runs(tag: str | None = None, db: AsyncSession = Depends(get_db)):
 
 @router.get("/jobs", response_model=RunningJobsOut)
 async def list_running_jobs(db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.read")
     runs_stmt = (
         select(Run)
         .where(Run.status.in_(("pending", "running")))
         .options(selectinload(Run.suite), selectinload(Run.agent_config))
         .order_by(Run.created_at.desc())
     )
+    runs_stmt = apply_workspace_filter(runs_stmt, Run, ctx)
     runs = (await db.execute(runs_stmt)).scalars().all()
     run_items = [
         RunningJobItem(
@@ -535,6 +596,7 @@ async def list_running_jobs(db: AsyncSession = Depends(get_db)):
         .where(RunCostPreview.status.in_(("pending", "running")))
         .order_by(RunCostPreview.created_at.desc())
     )
+    previews_stmt = apply_workspace_filter(previews_stmt, RunCostPreview, ctx)
     previews = (await db.execute(previews_stmt)).scalars().all()
     preview_items = [
         RunningJobItem(
@@ -553,6 +615,7 @@ async def list_running_jobs(db: AsyncSession = Depends(get_db)):
         .where(TraceLog.trace_type == "retry", TraceLog.status == "started")
         .order_by(TraceLog.created_at.desc())
     )
+    retry_stmt = apply_workspace_filter(retry_stmt, TraceLog, ctx)
     retry_traces = (await db.execute(retry_stmt)).scalars().all()
     retry_items = [
         RunningJobItem(
@@ -575,6 +638,8 @@ async def list_running_jobs(db: AsyncSession = Depends(get_db)):
 
 @router.post("", response_model=list[RunOut], status_code=201)
 async def create_run(body: RunCreate, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.execute")
     _, agent, queries, query_ids = await _resolve_run_inputs(body, db)
     if agent.executor_type == "openai_agents" and len(queries) > 3:
         stmt = (
@@ -602,11 +667,15 @@ async def create_run(body: RunCreate, db: AsyncSession = Depends(get_db)):
 
 @router.post("/cost-preview", response_model=RunCostPreviewOut)
 async def create_cost_preview(body: RunCreate, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.execute")
     return await _build_preview(body, db)
 
 
 @router.post("/cost-preview/start", response_model=RunCostPreviewRecordOut)
 async def start_cost_preview(body: RunCreate, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.execute")
     suite, agent, queries, query_ids = await _resolve_run_inputs(body, db)
     if agent.executor_type != "openai_agents":
         raise HTTPException(400, "Cost preview is only supported for openai_agents")
@@ -614,6 +683,10 @@ async def start_cost_preview(body: RunCreate, db: AsyncSession = Depends(get_db)
     sample_size = min(3, len(queries))
     sampled_queries = random.sample(queries, sample_size)
     record = RunCostPreview(
+        organization_id=ctx.organization_id,
+        project_id=ctx.project_id,
+        created_by_user_id=ctx.user.id,
+        visibility_scope=body.visibility_scope,
         suite_id=body.suite_id,
         agent_config_id=body.agent_config_id,
         label=body.label,
@@ -642,9 +715,12 @@ async def start_cost_preview(body: RunCreate, db: AsyncSession = Depends(get_db)
 
 @router.get("/cost-preview", response_model=list[RunCostPreviewRecordOut])
 async def list_cost_previews(limit: int = 100, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.read")
     await _enqueue_pending_previews(db)
     q = min(max(limit, 1), 500)
     stmt = select(RunCostPreview).order_by(RunCostPreview.created_at.desc()).limit(q)
+    stmt = apply_workspace_filter(stmt, RunCostPreview, ctx)
     previews = (await db.execute(stmt)).scalars().all()
 
     agent_ids = {p.agent_config_id for p in previews}
@@ -675,6 +751,8 @@ async def list_cost_previews(limit: int = 100, db: AsyncSession = Depends(get_db
 
 @router.get("/cost-preview/{preview_id}", response_model=RunCostPreviewRecordOut)
 async def get_cost_preview(preview_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.read")
     preview = await get_or_404(db, RunCostPreview, preview_id, "Cost preview")
     agent = await db.get(AgentConfig, preview.agent_config_id)
     suite = await db.get(BenchmarkSuite, preview.suite_id)
@@ -689,9 +767,9 @@ async def get_cost_preview(preview_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/cost-preview/{preview_id}/retry", response_model=RunCostPreviewRecordOut)
 async def retry_cost_preview(preview_id: int, db: AsyncSession = Depends(get_db)):
-    preview = await db.get(RunCostPreview, preview_id)
-    if not preview:
-        raise HTTPException(404, "Cost preview not found")
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.execute")
+    preview = await get_or_404(db, RunCostPreview, preview_id, "Cost preview")
     if preview.status == "running":
         raise HTTPException(400, "Cost preview is already running")
 
@@ -725,9 +803,9 @@ async def retry_cost_preview(preview_id: int, db: AsyncSession = Depends(get_db)
 async def approve_preview_and_start(
     preview_id: int, db: AsyncSession = Depends(get_db)
 ):
-    preview = await db.get(RunCostPreview, preview_id)
-    if not preview:
-        raise HTTPException(404, "Cost preview not found")
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.execute")
+    preview = await get_or_404(db, RunCostPreview, preview_id, "Cost preview")
     if preview.status != "completed":
         raise HTTPException(400, f"Cost preview is not ready yet (status={preview.status})")
     if preview.consumed_at is not None:
@@ -742,6 +820,7 @@ async def approve_preview_and_start(
         query_ids=preview.query_ids,
         output_dir=preview.output_dir,
         repeat=preview.repeat,
+        visibility_scope=preview.visibility_scope,
     )
     _, agent, queries, query_ids = await _resolve_run_inputs(body, db)
     if agent.executor_type != "openai_agents":
@@ -775,12 +854,15 @@ async def _start_run_job(run_id: int, query_ids: list[int], batch_size: int):
 
 @router.get("/group/{run_group}", response_model=list[RunDetailOut])
 async def list_group_runs(run_group: str, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.read")
     stmt = (
         select(Run)
         .where(Run.run_group == run_group)
         .options(selectinload(Run.suite), selectinload(Run.agent_config))
         .order_by(Run.run_number)
     )
+    stmt = apply_workspace_filter(stmt, Run, ctx)
     result = await db.execute(stmt)
     runs = result.scalars().all()
     out = []
@@ -795,6 +877,8 @@ async def list_group_runs(run_group: str, db: AsyncSession = Depends(get_db)):
 @router.get("/{run_id}/config")
 async def get_run_config(run_id: int, db: AsyncSession = Depends(get_db)):
     """Return run configuration including agent and suite details."""
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.read")
     stmt = (
         select(Run)
         .where(Run.id == run_id)
@@ -803,6 +887,7 @@ async def get_run_config(run_id: int, db: AsyncSession = Depends(get_db)):
             selectinload(Run.agent_config),
         )
     )
+    stmt = apply_workspace_filter(stmt, Run, ctx)
     result = await db.execute(stmt)
     run = result.scalar_one_or_none()
     if not run:
@@ -847,11 +932,14 @@ async def get_run_config(run_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{run_id}", response_model=RunDetailOut)
 async def get_run(run_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.read")
     stmt = (
         select(Run)
         .where(Run.id == run_id)
         .options(selectinload(Run.suite), selectinload(Run.agent_config))
     )
+    stmt = apply_workspace_filter(stmt, Run, ctx)
     result = await db.execute(stmt)
     run = result.scalar_one_or_none()
     if not run:
@@ -864,9 +952,9 @@ async def get_run(run_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{run_id}/cancel", response_model=RunOut)
 async def cancel_run(run_id: int, db: AsyncSession = Depends(get_db)):
-    run = await db.get(Run, run_id)
-    if not run:
-        raise HTTPException(404, "Run not found")
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.cancel")
+    run = await get_or_404(db, Run, run_id, "Run")
     if run.status not in ("pending", "running"):
         raise HTTPException(400, "Run cannot be cancelled")
     run.status = "cancelled"
@@ -880,9 +968,9 @@ async def cancel_run(run_id: int, db: AsyncSession = Depends(get_db)):
 async def delete_run(
     run_id: int, delete_data: bool = False, db: AsyncSession = Depends(get_db)
 ):
-    run = await db.get(Run, run_id)
-    if not run:
-        raise HTTPException(404, "Run not found")
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.delete")
+    run = await get_or_404(db, Run, run_id, "Run")
     output_dir = run.output_dir
     run_group = run.run_group
     await db.delete(run)
@@ -908,11 +996,22 @@ class RunImport(BaseModel):
 @router.post("/import", response_model=RunOut, status_code=201)
 async def import_run(body: RunImport, db: AsyncSession = Depends(get_db)):
     """Import a completed run from existing JSON files on disk."""
-    suite = await db.get(BenchmarkSuite, body.suite_id)
-    if not suite:
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.execute")
+    suite_stmt = apply_workspace_filter(
+        select(BenchmarkSuite).where(BenchmarkSuite.id == body.suite_id),
+        BenchmarkSuite,
+        ctx,
+    )
+    if (await db.execute(suite_stmt)).scalar_one_or_none() is None:
         raise HTTPException(404, "Suite not found")
-    agent = await db.get(AgentConfig, body.agent_config_id)
-    if not agent:
+
+    agent_stmt = apply_workspace_filter(
+        select(AgentConfig).where(AgentConfig.id == body.agent_config_id),
+        AgentConfig,
+        ctx,
+    )
+    if (await db.execute(agent_stmt)).scalar_one_or_none() is None:
         raise HTTPException(404, "Agent config not found")
 
     json_dir = Path(body.json_dir).expanduser()
@@ -936,6 +1035,10 @@ async def import_run(body: RunImport, db: AsyncSession = Depends(get_db)):
     # Create the run as completed
     now = datetime.now(timezone.utc)
     run = Run(
+        organization_id=ctx.organization_id,
+        project_id=ctx.project_id,
+        created_by_user_id=ctx.user.id,
+        visibility_scope="project",
         suite_id=body.suite_id,
         agent_config_id=body.agent_config_id,
         label=body.label,
@@ -972,6 +1075,10 @@ async def import_run(body: RunImport, db: AsyncSession = Depends(get_db)):
             continue
 
         result = Result(
+            organization_id=run.organization_id,
+            project_id=run.project_id,
+            created_by_user_id=run.created_by_user_id,
+            visibility_scope=run.visibility_scope,
             run_id=run.id,
             query_id=query.id,
             agent_response=data.get("agent_response") or None,
@@ -999,7 +1106,10 @@ async def import_run(body: RunImport, db: AsyncSession = Depends(get_db)):
 async def delete_group(
     run_group: str, delete_data: bool = False, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "runs.delete")
     stmt = select(Run).where(Run.run_group == run_group)
+    stmt = apply_workspace_filter(stmt, Run, ctx)
     result = await db.execute(stmt)
     runs = result.scalars().all()
     if not runs:

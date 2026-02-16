@@ -46,11 +46,15 @@ export default function RunDetailPage() {
   const [rerunLabel, setRerunLabel] = useState("");
   const [rerunRepeat, setRerunRepeat] = useState("1");
   const [rerunBatch, setRerunBatch] = useState("10");
-  const [rerunQueryIds, setRerunQueryIds] = useState<{ id: number; ordinal: number; text: string; checked: boolean }[]>([]);
+  const [rerunQueryIds, setRerunQueryIds] = useState<
+    { id: number; ordinal: number; text: string; checked: boolean }[]
+  >([]);
 
   // SSE state
   const [liveResults, setLiveResults] = useState<LiveResult[]>([]);
-  const [progress, setProgress] = useState<Record<number, { current: number; total: number }>>({});
+  const [progress, setProgress] = useState<
+    Record<number, { current: number; total: number }>
+  >({});
   const completedRef = useRef(0);
   const startTimeRef = useRef(Date.now());
   const [elapsed, setElapsed] = useState("0m0s");
@@ -64,15 +68,17 @@ export default function RunDetailPage() {
   // Fetch group runs if applicable
   const { data: groupRuns = [] } = useQuery({
     queryKey: ["group", run?.run_group],
-    queryFn: () => run?.run_group ? runsApi.listGroup(run.run_group) : Promise.resolve([]),
+    queryFn: () =>
+      run?.run_group ? runsApi.listGroup(run.run_group) : Promise.resolve([]),
     enabled: !!run?.run_group,
   });
 
   const allRunIds = groupRuns.length > 1 ? groupRuns.map((r) => r.id) : [runId];
   const isGroup = groupRuns.length > 1;
-  const anyRunning = groupRuns.length > 0
-    ? groupRuns.some((r) => r.status === "running" || r.status === "pending")
-    : run?.status === "running" || run?.status === "pending";
+  const anyRunning =
+    groupRuns.length > 0
+      ? groupRuns.some((r) => r.status === "running" || r.status === "pending")
+      : run?.status === "running" || run?.status === "pending";
 
   // SSE for each running run
   useEffect(() => {
@@ -89,15 +95,23 @@ export default function RunDetailPage() {
       es.addEventListener("progress", (e) => {
         try {
           const d: SSEProgressData = JSON.parse(e.data);
-          setProgress((prev) => ({ ...prev, [rid]: { current: d.current, total: d.total } }));
-          setLiveResults((prev) => [{
-            runId: rid,
-            queryOrdinal: d.query_ordinal,
-            queryText: d.query_text,
-            success: d.success,
-            time: d.time,
-          }, ...prev]);
-        } catch { /* ignore */ }
+          setProgress((prev) => ({
+            ...prev,
+            [rid]: { current: d.current, total: d.total },
+          }));
+          setLiveResults((prev) => [
+            {
+              runId: rid,
+              queryOrdinal: d.query_ordinal,
+              queryText: d.query_text,
+              success: d.success,
+              time: d.time,
+            },
+            ...prev,
+          ]);
+        } catch {
+          /* ignore */
+        }
       });
 
       es.addEventListener("complete", () => {
@@ -105,11 +119,16 @@ export default function RunDetailPage() {
         completedRef.current++;
         if (completedRef.current >= allRunIds.length) {
           queryClient.invalidateQueries({ queryKey: ["run", runId] });
-          if (run?.run_group) queryClient.invalidateQueries({ queryKey: ["group", run.run_group] });
+          if (run?.run_group)
+            queryClient.invalidateQueries({
+              queryKey: ["group", run.run_group],
+            });
         }
       });
 
-      es.addEventListener("error", () => { es.close(); });
+      es.addEventListener("error", () => {
+        es.close();
+      });
     });
 
     return () => sources.forEach((es) => es.close());
@@ -118,7 +137,10 @@ export default function RunDetailPage() {
   // Elapsed timer
   useEffect(() => {
     if (!anyRunning) return;
-    const iv = setInterval(() => setElapsed(formatElapsed(startTimeRef.current)), 1000);
+    const iv = setInterval(
+      () => setElapsed(formatElapsed(startTimeRef.current)),
+      1000,
+    );
     return () => clearInterval(iv);
   }, [anyRunning]);
 
@@ -129,7 +151,8 @@ export default function RunDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["run", runId] });
-      if (run?.run_group) queryClient.invalidateQueries({ queryKey: ["group", run.run_group] });
+      if (run?.run_group)
+        queryClient.invalidateQueries({ queryKey: ["group", run.run_group] });
     },
   });
 
@@ -149,11 +172,23 @@ export default function RunDetailPage() {
     setRerunBatch(String(run.batch_size));
     // Load queries from results
     const results = await resultsApi.list(allRunIds[0]);
-    const queryMap: Record<number, { id: number; ordinal: number; text: string }> = {};
+    const queryMap: Record<
+      number,
+      { id: number; ordinal: number; text: string }
+    > = {};
     results.forEach((r) => {
-      if (r.query) queryMap[r.query.id] = { id: r.query.id, ordinal: r.query.ordinal, text: r.query.query_text };
+      if (r.query)
+        queryMap[r.query.id] = {
+          id: r.query.id,
+          ordinal: r.query.ordinal,
+          text: r.query.query_text,
+        };
     });
-    setRerunQueryIds(Object.values(queryMap).sort((a, b) => a.ordinal - b.ordinal).map((q) => ({ ...q, checked: true })));
+    setRerunQueryIds(
+      Object.values(queryMap)
+        .sort((a, b) => a.ordinal - b.ordinal)
+        .map((q) => ({ ...q, checked: true })),
+    );
     setRerunModal(true);
   }, [run, isGroup, groupRuns, allRunIds]);
 
@@ -174,12 +209,14 @@ export default function RunDetailPage() {
       if (cfg.agent?.executor_type === "openai_agents") {
         const preview = await runsApi.previewCost(body);
         if (preview.missing_model_pricing) {
-          throw new Error("Pricing missing for this model in data/openai_pricing.json");
+          throw new Error(
+            "Pricing missing for this model in data/openai_pricing.json",
+          );
         }
         const ok = window.confirm(
           `Estimated total cost: $${preview.estimated_total_cost_usd.toFixed(6)} ${preview.currency}\n` +
-          `Sampled query ordinals: ${preview.sampled_query_ordinals.join(", ")}\n` +
-          `Approve and start rerun?`
+            `Sampled query ordinals: ${preview.sampled_query_ordinals.join(", ")}\n` +
+            `Approve and start rerun?`,
         );
         if (!ok) {
           throw new Error("Run cancelled by user");
@@ -197,13 +234,21 @@ export default function RunDetailPage() {
 
   // Grade CSV import
   const gradeImportMutation = useMutation({
-    mutationFn: async ({ file, mapping }: { file: File; mapping: Record<string, string | null> }) => {
+    mutationFn: async ({
+      file,
+      mapping,
+    }: {
+      file: File;
+      mapping: Record<string, string | null>;
+    }) => {
       return gradesApi.importCsv(runId, file, mapping);
     },
     onSuccess: (data) => {
       setGradeImportModal(false);
       queryClient.invalidateQueries({ queryKey: ["results"] });
-      alert(`Imported ${data.imported} grade(s), skipped ${data.skipped}.${data.errors.length ? `\nErrors:\n${data.errors.map((e) => `Row ${e.row}: ${e.reason}`).join("\n")}` : ""}`);
+      alert(
+        `Imported ${data.imported} grade(s), skipped ${data.skipped}.${data.errors.length ? `\nErrors:\n${data.errors.map((e) => `Row ${e.row}: ${e.reason}`).join("\n")}` : ""}`,
+      );
     },
   });
 
@@ -215,38 +260,99 @@ export default function RunDetailPage() {
     return () => document.removeEventListener("click", handler);
   }, [actionsOpen]);
 
-  if (isLoading || !run) return <div className="text-center py-8 text-muted">Loading...</div>;
+  if (isLoading || !run)
+    return <div className="text-center py-8 text-muted">Loading...</div>;
 
   const exportRunIds = allRunIds;
   const rerunCheckedCount = rerunQueryIds.filter((q) => q.checked).length;
 
   return (
     <>
-      <PageHeader title={run.label} backHref="/" subtitle={
-        <div className="flex items-center gap-2 mt-1">
-          <span className={cn("font-semibold text-sm", run.status === "completed" && "text-[var(--tag-green-text)]", run.status === "running" && "text-brand", run.status === "failed" && "text-destructive")}>{run.status}</span>
-          <div className="flex gap-1">
-            {(run.tags || []).map((t) => (
-              <span key={t} className="inline-block px-2 py-0.5 rounded-xl text-xs font-semibold bg-[var(--tag-blue-bg)] text-[var(--tag-blue-text)]">{t}</span>
-            ))}
+      <PageHeader
+        title={run.label}
+        backHref="/"
+        subtitle={
+          <div className="flex items-center gap-2 mt-1">
+            <span
+              className={cn(
+                "font-semibold text-sm",
+                run.status === "completed" && "text-[var(--tag-green-text)]",
+                run.status === "running" && "text-brand",
+                run.status === "failed" && "text-destructive",
+              )}
+            >
+              {run.status}
+            </span>
+            <div className="flex gap-1">
+              {(run.tags || []).map((t) => (
+                <span
+                  key={t}
+                  className="inline-block px-2 py-0.5 rounded-md text-xs font-semibold bg-[var(--tag-blue-bg)] text-[var(--tag-blue-text)]"
+                >
+                  {t}
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      }>
+        }
+      >
         <div className="relative">
-          <button className="w-8 h-8 text-xl text-muted hover:text-foreground rounded-lg hover:bg-[var(--surface-hover)] flex items-center justify-center" onClick={(e) => { e.stopPropagation(); setActionsOpen(!actionsOpen); }}>&#8943;</button>
+          <button
+            className="w-8 h-8 text-xl text-muted hover:text-foreground rounded-lg hover:bg-[var(--surface-hover)] flex items-center justify-center"
+            onClick={(e) => {
+              e.stopPropagation();
+              setActionsOpen(!actionsOpen);
+            }}
+          >
+            &#8943;
+          </button>
           {actionsOpen && (
             <div className="absolute right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden min-w-[140px]">
-              <button className="block w-full text-left px-4 py-2 text-sm hover:bg-[var(--surface-hover)]" onClick={() => { setActionsOpen(false); openRerun(); }}>&#8635; Rerun</button>
-              <button className="block w-full text-left px-4 py-2 text-sm text-destructive hover:bg-[var(--surface-hover)]" onClick={() => { setActionsOpen(false); setDeleteModal(true); }}>&#10005; Delete</button>
+              <button
+                className="block w-full text-left px-4 py-2 text-sm hover:bg-[var(--surface-hover)]"
+                onClick={() => {
+                  setActionsOpen(false);
+                  openRerun();
+                }}
+              >
+                &#8635; Rerun
+              </button>
+              <button
+                className="block w-full text-left px-4 py-2 text-sm text-destructive hover:bg-[var(--surface-hover)]"
+                onClick={() => {
+                  setActionsOpen(false);
+                  setDeleteModal(true);
+                }}
+              >
+                &#10005; Delete
+              </button>
             </div>
           )}
         </div>
       </PageHeader>
 
       <div className="text-sm text-muted mb-4">
-        <span><strong>Agent:</strong> <a href={`/agents/${run.agent_config_id}`} target="_blank" className="text-brand hover:underline">{run.agent_name}</a></span>
+        <span>
+          <strong>Agent:</strong>{" "}
+          <a
+            href={`/agents/${run.agent_config_id}`}
+            target="_blank"
+            className="text-brand hover:underline"
+          >
+            {run.agent_name}
+          </a>
+        </span>
         <span className="mx-3">|</span>
-        <span><strong>Dataset:</strong> <a href={`/datasets/${run.suite_id}`} target="_blank" className="text-brand hover:underline">{run.suite_name}</a></span>
+        <span>
+          <strong>Dataset:</strong>{" "}
+          <a
+            href={`/datasets/${run.suite_id}`}
+            target="_blank"
+            className="text-brand hover:underline"
+          >
+            {run.suite_name}
+          </a>
+        </span>
       </div>
 
       {anyRunning ? (
@@ -254,17 +360,41 @@ export default function RunDetailPage() {
         <div>
           {isGroup ? (
             <div className="mb-4">
-              <h3 className="font-semibold mb-3">Group Progress ({groupRuns.length} runs)</h3>
+              <h3 className="font-semibold mb-3">
+                Group Progress ({groupRuns.length} runs)
+              </h3>
               {groupRuns.map((gr) => {
-                const p = progress[gr.id] || { current: gr.progress_current, total: gr.progress_total };
-                const pct = p.total ? ((p.current / p.total) * 100).toFixed(0) : "0";
+                const p = progress[gr.id] || {
+                  current: gr.progress_current,
+                  total: gr.progress_total,
+                };
+                const pct = p.total
+                  ? ((p.current / p.total) * 100).toFixed(0)
+                  : "0";
                 return (
                   <div key={gr.id} className="mb-3">
                     <div className="flex justify-between items-center mb-1">
-                      <span className="text-sm"><strong>{gr.label}</strong> <span className={cn("font-semibold", gr.status === "running" && "text-brand")}>{gr.status}</span></span>
-                      <span className="text-xs text-muted">{p.current}/{p.total}</span>
+                      <span className="text-sm">
+                        <strong>{gr.label}</strong>{" "}
+                        <span
+                          className={cn(
+                            "font-semibold",
+                            gr.status === "running" && "text-brand",
+                          )}
+                        >
+                          {gr.status}
+                        </span>
+                      </span>
+                      <span className="text-xs text-muted">
+                        {p.current}/{p.total}
+                      </span>
                     </div>
-                    <div className="w-full h-3 bg-border rounded-full"><div className="h-full bg-brand rounded-full transition-all" style={{ width: `${pct}%` }} /></div>
+                    <div className="w-full h-3 bg-border rounded-full">
+                      <div
+                        className="h-full bg-brand rounded-full transition-all"
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
                   </div>
                 );
               })}
@@ -272,11 +402,22 @@ export default function RunDetailPage() {
           ) : (
             <div className="mb-4">
               <div className="flex justify-between items-center mb-1">
-                <span className="text-sm">Progress: <strong>{progress[runId]?.current ?? run.progress_current}/{progress[runId]?.total ?? run.progress_total}</strong></span>
+                <span className="text-sm">
+                  Progress:{" "}
+                  <strong>
+                    {progress[runId]?.current ?? run.progress_current}/
+                    {progress[runId]?.total ?? run.progress_total}
+                  </strong>
+                </span>
                 <span className="text-xs text-muted">elapsed: {elapsed}</span>
               </div>
               <div className="w-full h-3 bg-border rounded-full">
-                <div className="h-full bg-brand rounded-full transition-all" style={{ width: `${run.progress_total ? (((progress[runId]?.current ?? run.progress_current) / run.progress_total) * 100).toFixed(0) : 0}%` }} />
+                <div
+                  className="h-full bg-brand rounded-full transition-all"
+                  style={{
+                    width: `${run.progress_total ? (((progress[runId]?.current ?? run.progress_current) / run.progress_total) * 100).toFixed(0) : 0}%`,
+                  }}
+                />
               </div>
             </div>
           )}
@@ -284,14 +425,33 @@ export default function RunDetailPage() {
           <h3 className="font-semibold mb-2 mt-6">Live Results</h3>
           <div className="space-y-1 max-h-[400px] overflow-y-auto">
             {liveResults.map((lr, i) => (
-              <div key={i} className={cn("flex items-center gap-2 px-3 py-1.5 rounded text-sm", lr.success ? "bg-[var(--tag-green-bg)]" : "bg-[var(--tag-orange-bg)]")}>
-                <span>{isGroup ? `[Run ${allRunIds.indexOf(lr.runId) + 1}] ` : ""}Q{lr.queryOrdinal} {lr.success ? "\u2713" : "\u2717"} {lr.time ? `${lr.time.toFixed(1)}s` : ""}</span>
+              <div
+                key={i}
+                className={cn(
+                  "flex items-center gap-2 px-3 py-1.5 rounded text-sm",
+                  lr.success
+                    ? "bg-[var(--tag-green-bg)]"
+                    : "bg-[var(--tag-orange-bg)]",
+                )}
+              >
+                <span>
+                  {isGroup ? `[Run ${allRunIds.indexOf(lr.runId) + 1}] ` : ""}Q
+                  {lr.queryOrdinal} {lr.success ? "\u2713" : "\u2717"}{" "}
+                  {lr.time ? `${lr.time.toFixed(1)}s` : ""}
+                </span>
                 <span className="text-muted truncate">{lr.queryText}</span>
               </div>
             ))}
           </div>
           <div className="mt-4">
-            <button className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold text-sm hover:bg-red-700" onClick={() => { if (confirm("Cancel this run?")) cancelMutation.mutate(); }}>Cancel Run</button>
+            <button
+              className="btn-subtle btn-subtle-danger"
+              onClick={() => {
+                if (confirm("Cancel this run?")) cancelMutation.mutate();
+              }}
+            >
+              Cancel Run
+            </button>
           </div>
         </div>
       ) : (
@@ -299,7 +459,11 @@ export default function RunDetailPage() {
         <>
           <div className="flex gap-1 mb-4 bg-[var(--surface-hover)] rounded-lg p-1 w-fit">
             {(["grading", "dashboard", "config"] as Mode[]).map((m) => (
-              <button key={m} className={cn("px-4 py-1.5 rounded-md text-sm font-semibold transition-colors", mode === m ? "bg-brand text-white" : "text-muted hover:bg-[var(--surface)]")} onClick={() => setMode(m)}>
+              <button
+                key={m}
+                className={cn("btn-subtle", mode === m && "btn-subtle-primary")}
+                onClick={() => setMode(m)}
+              >
                 {m.charAt(0).toUpperCase() + m.slice(1)}
               </button>
             ))}
@@ -307,13 +471,24 @@ export default function RunDetailPage() {
 
           {mode === "grading" && (
             <>
-              {isGroup ? <GradingView runIds={allRunIds} compare /> : <GradingView runId={runId} />}
-              <ExportBar runIds={exportRunIds} onImportGrades={() => setGradeImportModal(true)} />
+              {isGroup ? (
+                <GradingView runIds={allRunIds} compare />
+              ) : (
+                <GradingView runId={runId} />
+              )}
+              <ExportBar
+                runIds={exportRunIds}
+                onImportGrades={() => setGradeImportModal(true)}
+              />
             </>
           )}
           {mode === "dashboard" && (
             <>
-              {isGroup ? <CompareDashboard runIds={allRunIds} /> : <DashboardView runId={runId} />}
+              {isGroup ? (
+                <CompareDashboard runIds={allRunIds} />
+              ) : (
+                <DashboardView runId={runId} />
+              )}
               <ExportBar runIds={exportRunIds} />
             </>
           )}
@@ -323,47 +498,110 @@ export default function RunDetailPage() {
 
       {/* Rerun Modal */}
       {rerunModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={(e) => e.target === e.currentTarget && setRerunModal(false)}>
-          <div className="bg-card rounded-xl w-[90%] max-w-[550px] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+          onClick={(e) => e.target === e.currentTarget && setRerunModal(false)}
+        >
+          <div className="bg-card rounded-lg w-[90%] max-w-[550px] max-h-[85vh] overflow-hidden flex flex-col shadow-2xl">
             <div className="flex justify-between items-center p-6 pb-0">
-              <h3 className="text-xl font-semibold">Rerun</h3>
-              <button className="text-2xl text-muted hover:text-foreground" onClick={() => setRerunModal(false)}>&times;</button>
+              <h3 className="text-lg font-semibold">Rerun</h3>
+              <button
+                className="text-2xl text-muted hover:text-foreground"
+                onClick={() => setRerunModal(false)}
+              >
+                &times;
+              </button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="mb-4">
-                <label className="block font-semibold text-sm text-muted mb-1">Label</label>
-                <input className="w-full px-3 py-2 border-2 border-border rounded-lg text-sm bg-card text-foreground focus:border-brand outline-none" value={rerunLabel} onChange={(e) => setRerunLabel(e.target.value)} />
+                <label className="block font-semibold text-sm text-muted mb-1">
+                  Label
+                </label>
+                <input
+                  className="w-full px-2.5 py-1.5 border border-border rounded-md text-[13px] bg-card text-foreground focus:border-brand outline-none"
+                  value={rerunLabel}
+                  onChange={(e) => setRerunLabel(e.target.value)}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className="block font-semibold text-sm text-muted mb-1">Repeat</label>
-                  <input type="number" className="w-full px-3 py-2 border-2 border-border rounded-lg text-sm bg-card text-foreground focus:border-brand outline-none" value={rerunRepeat} onChange={(e) => setRerunRepeat(e.target.value)} min={1} max={10} />
+                  <label className="block font-semibold text-sm text-muted mb-1">
+                    Repeat
+                  </label>
+                  <input
+                    type="number"
+                    className="w-full px-2.5 py-1.5 border border-border rounded-md text-[13px] bg-card text-foreground focus:border-brand outline-none"
+                    value={rerunRepeat}
+                    onChange={(e) => setRerunRepeat(e.target.value)}
+                    min={1}
+                    max={10}
+                  />
                 </div>
                 <div>
-                  <label className="block font-semibold text-sm text-muted mb-1">Batch Size</label>
-                  <select className="w-full px-3 py-2 border-2 border-border rounded-lg text-sm bg-card text-foreground focus:border-brand outline-none" value={rerunBatch} onChange={(e) => setRerunBatch(e.target.value)}>
-                    <option value="5">5</option><option value="10">10</option><option value="15">15</option><option value="20">20</option>
+                  <label className="block font-semibold text-sm text-muted mb-1">
+                    Batch Size
+                  </label>
+                  <select
+                    className="w-full px-2.5 py-1.5 border border-border rounded-md text-[13px] bg-card text-foreground focus:border-brand outline-none"
+                    value={rerunBatch}
+                    onChange={(e) => setRerunBatch(e.target.value)}
+                  >
+                    <option value="5">5</option>
+                    <option value="10">10</option>
+                    <option value="15">15</option>
+                    <option value="20">20</option>
                   </select>
                 </div>
               </div>
               <div>
                 <label className="block font-semibold text-sm text-muted mb-1">
-                  Queries <span className="text-muted-light font-normal">({rerunCheckedCount} selected)</span>
+                  Queries{" "}
+                  <span className="text-muted-light font-normal">
+                    ({rerunCheckedCount} selected)
+                  </span>
                 </label>
                 <div className="max-h-[250px] overflow-y-auto border border-border rounded-lg p-2 bg-[var(--surface)] space-y-0.5">
                   {rerunQueryIds.map((q) => (
-                    <label key={q.id} className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-[var(--surface-hover)] cursor-pointer">
-                      <input type="checkbox" checked={q.checked} onChange={() => setRerunQueryIds((prev) => prev.map((p) => p.id === q.id ? { ...p, checked: !p.checked } : p))} />
-                      <span className="font-semibold text-muted shrink-0">Q{q.ordinal}</span>
-                      <span className="truncate">{q.text.length > 80 ? q.text.substring(0, 80) + "..." : q.text}</span>
+                    <label
+                      key={q.id}
+                      className="flex items-center gap-2 text-sm px-2 py-1 rounded hover:bg-[var(--surface-hover)] cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={q.checked}
+                        onChange={() =>
+                          setRerunQueryIds((prev) =>
+                            prev.map((p) =>
+                              p.id === q.id ? { ...p, checked: !p.checked } : p,
+                            ),
+                          )
+                        }
+                      />
+                      <span className="font-semibold text-muted shrink-0">
+                        Q{q.ordinal}
+                      </span>
+                      <span className="truncate">
+                        {q.text.length > 80
+                          ? q.text.substring(0, 80) + "..."
+                          : q.text}
+                      </span>
                     </label>
                   ))}
                 </div>
               </div>
             </div>
             <div className="flex justify-end gap-3 p-6 pt-0 border-t border-border mt-auto">
-              <button className="px-4 py-2 bg-[var(--surface-hover)] rounded-lg font-semibold text-sm hover:bg-border" onClick={() => setRerunModal(false)}>Cancel</button>
-              <button className="px-4 py-2 bg-brand text-white rounded-lg font-semibold text-sm hover:bg-brand-hover disabled:opacity-50" onClick={() => rerunMutation.mutate()} disabled={rerunMutation.isPending}>
+              <button
+                className="btn-subtle"
+                onClick={() => setRerunModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-subtle btn-subtle-primary disabled:opacity-50"
+                onClick={() => rerunMutation.mutate()}
+                disabled={rerunMutation.isPending}
+              >
                 {rerunMutation.isPending ? "Starting..." : "Start Rerun"}
               </button>
             </div>
@@ -375,27 +613,61 @@ export default function RunDetailPage() {
       {gradeImportModal && (
         <CsvGradeImportModal
           onClose={() => setGradeImportModal(false)}
-          onImport={(file, mapping) => gradeImportMutation.mutate({ file, mapping })}
+          onImport={(file, mapping) =>
+            gradeImportMutation.mutate({ file, mapping })
+          }
           isPending={gradeImportMutation.isPending}
         />
       )}
 
       {/* Delete Modal */}
       {deleteModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={(e) => e.target === e.currentTarget && setDeleteModal(false)}>
-          <div className="bg-card rounded-xl w-[420px] p-6 shadow-2xl">
+        <div
+          className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
+          onClick={(e) => e.target === e.currentTarget && setDeleteModal(false)}
+        >
+          <div className="bg-card rounded-lg w-[420px] p-6 shadow-2xl">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg">Delete Run</h3>
-              <button className="text-2xl text-muted hover:text-foreground" onClick={() => setDeleteModal(false)}>&times;</button>
+              <button
+                className="text-2xl text-muted hover:text-foreground"
+                onClick={() => setDeleteModal(false)}
+              >
+                &times;
+              </button>
             </div>
-            <p className="mb-4">{isGroup ? <>This will delete <strong>all {groupRuns.length} runs</strong> in this group.</> : "This will delete this run and its results."}</p>
+            <p className="mb-4">
+              {isGroup ? (
+                <>
+                  This will delete <strong>all {groupRuns.length} runs</strong>{" "}
+                  in this group.
+                </>
+              ) : (
+                "This will delete this run and its results."
+              )}
+            </p>
             <label className="flex items-center gap-2 p-2 bg-[var(--tag-orange-bg)] border border-[var(--tag-orange-text)]/20 rounded-md text-sm cursor-pointer">
-              <input type="checkbox" checked={deleteFiles} onChange={(e) => setDeleteFiles(e.target.checked)} />
-              <span className="text-destructive">Also delete output files from disk</span>
+              <input
+                type="checkbox"
+                checked={deleteFiles}
+                onChange={(e) => setDeleteFiles(e.target.checked)}
+              />
+              <span className="text-destructive">
+                Also delete output files from disk
+              </span>
             </label>
             <div className="flex justify-end gap-3 mt-6">
-              <button className="px-4 py-2 bg-[var(--surface-hover)] rounded-lg font-semibold text-sm hover:bg-border" onClick={() => setDeleteModal(false)}>Cancel</button>
-              <button className="px-4 py-2 bg-red-600 text-white rounded-lg font-semibold text-sm hover:bg-red-700 disabled:opacity-50" onClick={() => deleteMutation.mutate()} disabled={deleteMutation.isPending}>
+              <button
+                className="btn-subtle"
+                onClick={() => setDeleteModal(false)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-subtle btn-subtle-danger disabled:opacity-50"
+                onClick={() => deleteMutation.mutate()}
+                disabled={deleteMutation.isPending}
+              >
                 {deleteMutation.isPending ? "Deleting..." : "Delete"}
               </button>
             </div>
@@ -406,17 +678,33 @@ export default function RunDetailPage() {
   );
 }
 
-function ExportBar({ runIds, onImportGrades }: { runIds: number[]; onImportGrades?: () => void }) {
+function ExportBar({
+  runIds,
+  onImportGrades,
+}: {
+  runIds: number[];
+  onImportGrades?: () => void;
+}) {
   return (
     <div className="flex gap-2 mt-6 pt-4 border-t border-border">
       {onImportGrades && (
-        <button onClick={onImportGrades} className="px-4 py-2 bg-[var(--surface-hover)] rounded-lg font-semibold text-sm hover:bg-border text-muted flex items-center gap-1.5">
+        <button onClick={onImportGrades} className="btn-subtle">
           <Upload size={14} /> Import Grades
         </button>
       )}
-      <a href={exportApi.htmlUrl(runIds)} target="_blank" className="px-4 py-2 bg-[var(--surface-hover)] rounded-lg font-semibold text-sm hover:bg-border no-underline text-muted">Share as HTML</a>
-      <a href={exportApi.csvUrl(runIds)} className="px-4 py-2 bg-[var(--surface-hover)] rounded-lg font-semibold text-sm hover:bg-border no-underline text-muted">Export CSV</a>
-      <a href={exportApi.jsonUrl(runIds)} className="px-4 py-2 bg-[var(--surface-hover)] rounded-lg font-semibold text-sm hover:bg-border no-underline text-muted">Export JSON</a>
+      <a
+        href={exportApi.htmlUrl(runIds)}
+        target="_blank"
+        className="btn-subtle no-underline"
+      >
+        Share as HTML
+      </a>
+      <a href={exportApi.csvUrl(runIds)} className="btn-subtle no-underline">
+        Export CSV
+      </a>
+      <a href={exportApi.jsonUrl(runIds)} className="btn-subtle no-underline">
+        Export JSON
+      </a>
     </div>
   );
 }

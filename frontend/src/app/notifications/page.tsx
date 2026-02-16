@@ -6,13 +6,16 @@ import Link from "next/link";
 import { notificationsApi } from "@/lib/api/notifications";
 import { PageHeader } from "@/components/layout/page-header";
 import { formatDate } from "@/lib/utils";
+import { useAuth } from "@/providers/auth-provider";
 
 export default function NotificationsPage() {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [showConfirm, setShowConfirm] = useState(false);
   const { data: notifications = [], isLoading, refetch } = useQuery({
     queryKey: ["notifications"],
     queryFn: () => notificationsApi.list({ limit: 100 }),
+    enabled: !!user,
   });
 
   const readMutation = useMutation({
@@ -31,17 +34,17 @@ export default function NotificationsPage() {
     <>
       {showConfirm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowConfirm(false)}>
-          <div className="bg-card border border-border rounded-xl shadow-lg p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card border border-border rounded-lg p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-sm font-semibold text-foreground">Remove all notifications</h3>
             <p className="text-sm text-muted mt-2">This will permanently delete all notifications. This action cannot be undone.</p>
             <div className="flex justify-end gap-2 mt-5">
-              <button onClick={() => setShowConfirm(false)} className="px-4 py-2 text-sm rounded-lg border border-border hover:bg-[var(--surface-hover)] transition-colors">
+              <button onClick={() => setShowConfirm(false)} className="px-3.5 py-1.5 text-[13px] rounded-md font-medium border border-border hover:bg-[var(--surface-hover)] transition-colors">
                 Cancel
               </button>
               <button
                 onClick={() => deleteAllMutation.mutate()}
                 disabled={deleteAllMutation.isPending}
-                className="px-4 py-2 text-sm rounded-lg bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
+                className="px-3.5 py-1.5 text-[13px] rounded-md font-medium bg-red-600 text-white hover:bg-red-700 transition-colors disabled:opacity-50"
               >
                 {deleteAllMutation.isPending ? "Removing..." : "Remove all"}
               </button>
@@ -60,14 +63,14 @@ export default function NotificationsPage() {
           </button>
           <button
             onClick={() => refetch()}
-            className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+            className="p-2 rounded-md text-muted hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
             title="Refresh"
           >
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg>
           </button>
         </div>
       </PageHeader>
-      <div className="bg-card rounded-xl border border-border shadow-sm">
+      <div className="bg-card rounded-lg border border-border">
         {isLoading ? (
           <div className="p-4 text-sm text-muted">Loading...</div>
         ) : notifications.length === 0 ? (
@@ -93,7 +96,7 @@ export default function NotificationsPage() {
                 </div>
                 {!n.is_read && (
                   <button
-                    className="px-3 py-1.5 bg-[var(--surface-hover)] border border-border rounded-lg text-xs font-semibold"
+                    className="px-3 py-1.5 bg-[var(--surface-hover)] border border-border rounded-md text-xs font-medium"
                     disabled={readMutation.isPending}
                     onClick={() => readMutation.mutate(n.id)}
                   >

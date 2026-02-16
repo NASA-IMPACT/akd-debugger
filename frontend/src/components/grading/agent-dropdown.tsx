@@ -42,7 +42,7 @@ export function AgentDropdown({
     <div ref={ref} className="relative mb-3">
       <button
         type="button"
-        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-[var(--surface)] text-sm font-semibold hover:bg-[var(--surface-hover)] transition-colors"
+        className="w-full flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-[var(--surface)] text-sm font-medium hover:bg-[var(--surface-hover)] transition-colors"
         onClick={() => setOpen((v) => !v)}
       >
         <span className={cn("w-2.5 h-2.5 rounded-full shrink-0", dotColors[selectedGrade])} />

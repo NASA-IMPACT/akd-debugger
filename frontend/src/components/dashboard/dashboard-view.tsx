@@ -69,7 +69,7 @@ function RunCostSection({
   const currency = String(pricingRates.currency || "USD");
 
   return (
-    <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+    <div className="bg-card rounded-lg p-6 px-8 mb-6">
       <h2 className="text-lg font-semibold mb-4 pb-2 border-b-2 border-border text-brand-dark">
         Cost Summary
       </h2>
@@ -115,7 +115,7 @@ function RunCostSection({
       </div>
 
       <button
-        className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-semibold bg-[var(--surface-hover)] border border-border hover:bg-[var(--surface)]"
+        className="inline-flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium bg-[var(--surface-hover)] border border-border hover:bg-[var(--surface)]"
         onClick={() => setOpen((v) => !v)}
       >
         {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}

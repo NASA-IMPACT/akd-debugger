@@ -82,7 +82,7 @@ export default function DatasetDetailPage() {
     setEditModal(true);
   };
 
-  const inputCls = "w-full px-3 py-2 rounded-lg text-sm outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
+  const inputCls = "w-full px-2.5 py-1.5 rounded-md text-[13px] outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
 
   if (isLoading || !suite) return <div className="text-center py-8 text-muted">Loading...</div>;
 
@@ -90,18 +90,24 @@ export default function DatasetDetailPage() {
 
   return (
     <>
-      <PageHeader title={suite.name} backHref="/datasets">
+      <PageHeader
+        title={suite.name}
+        backHref="/datasets"
+        titleAction={
+          <button
+            className="h-6 w-6 inline-flex items-center justify-center rounded-md text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+            onClick={openEditModal}
+            title="Edit dataset"
+            aria-label="Edit dataset"
+          >
+            <Pencil size={13} />
+          </button>
+        }
+      >
         <div className="flex items-center gap-2">
           {(suite.tags || []).map((t) => (
             <TagBadge key={t} tag={t} />
           ))}
-          <button
-            className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors ml-1"
-            onClick={openEditModal}
-            title="Edit dataset"
-          >
-            <Pencil size={16} />
-          </button>
         </div>
       </PageHeader>
       {suite.description && (
@@ -109,14 +115,14 @@ export default function DatasetDetailPage() {
       )}
 
       {/* CSV Import */}
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm mb-4">
+      <div className="bg-card rounded-lg border border-border p-5 mb-4">
         <div className="flex items-center justify-between">
           <div>
             <h2 className="text-lg font-semibold text-foreground">Import Queries from CSV</h2>
             <p className="text-muted text-xs mt-0.5">Upload a CSV and map columns to query fields</p>
           </div>
           <button
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-lg font-semibold text-sm hover:brightness-110 hover:-translate-y-px transition-all flex items-center gap-2"
+            className="btn-subtle btn-subtle-primary"
             onClick={() => { setImportMsg(""); setShowImportModal(true); }}
           >
             <Upload size={16} />
@@ -127,10 +133,10 @@ export default function DatasetDetailPage() {
       </div>
 
       {/* Queries table */}
-      <div className="bg-card rounded-xl border border-border p-5 shadow-sm overflow-hidden">
+      <div className="bg-card rounded-lg border border-border p-5 overflow-hidden">
         <div className="flex justify-between items-center mb-3">
           <h2 className="text-lg font-semibold text-foreground">Queries ({suite.queries?.length || 0})</h2>
-          <button className="px-3 py-1.5 bg-primary text-primary-foreground rounded-lg text-sm font-semibold hover:brightness-110 hover:-translate-y-px transition-all" onClick={() => setAddModal(true)}>+ Add Query</button>
+          <button className="btn-subtle btn-subtle-primary" onClick={() => setAddModal(true)}>+ Add Query</button>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm border-collapse">
@@ -184,9 +190,9 @@ export default function DatasetDetailPage() {
       {/* Edit Dataset Modal */}
       {editModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop" onClick={(e) => e.target === e.currentTarget && setEditModal(false)}>
-          <div className="bg-card border border-border rounded-2xl w-[90%] max-w-[500px] p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[90%] max-w-[500px] p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold text-foreground">Edit Dataset</h3>
+              <h3 className="text-lg font-semibold text-foreground">Edit Dataset</h3>
               <button className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setEditModal(false)}>
                 <X size={18} />
               </button>
@@ -205,8 +211,8 @@ export default function DatasetDetailPage() {
                 <input className={inputCls} value={editTags} onChange={(e) => setEditTags(e.target.value)} placeholder="comma-separated, e.g. astro, physics" />
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button type="button" className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setEditModal(false)}>Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all disabled:opacity-50" disabled={updateSuiteMutation.isPending}>
+                <button type="button" className="btn-subtle" onClick={() => setEditModal(false)}>Cancel</button>
+                <button type="submit" className="btn-subtle btn-subtle-primary disabled:opacity-50" disabled={updateSuiteMutation.isPending}>
                   {updateSuiteMutation.isPending ? "Saving..." : "Save"}
                 </button>
               </div>
@@ -218,9 +224,9 @@ export default function DatasetDetailPage() {
       {/* Add Query Modal */}
       {addModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop" onClick={(e) => e.target === e.currentTarget && setAddModal(false)}>
-          <div className="bg-card border border-border rounded-2xl w-[90%] max-w-[500px] p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[90%] max-w-[500px] p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold text-foreground">Add Query</h3>
+              <h3 className="text-lg font-semibold text-foreground">Add Query</h3>
               <button className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setAddModal(false)}>
                 <X size={18} />
               </button>
@@ -243,8 +249,8 @@ export default function DatasetDetailPage() {
                 <input className={inputCls} value={qComments} onChange={(e) => setQComments(e.target.value)} />
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button type="button" className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setAddModal(false)}>Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all disabled:opacity-50" disabled={addQueryMutation.isPending}>
+                <button type="button" className="btn-subtle" onClick={() => setAddModal(false)}>Cancel</button>
+                <button type="submit" className="btn-subtle btn-subtle-primary disabled:opacity-50" disabled={addQueryMutation.isPending}>
                   {addQueryMutation.isPending ? "Adding..." : "Add"}
                 </button>
               </div>

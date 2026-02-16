@@ -250,7 +250,7 @@ export function AgentChatView({ agentId }: Props) {
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="text-sm font-semibold text-foreground">Chat (session only)</div>
         <button
-          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--surface)] border border-border text-muted hover:text-foreground"
+          className="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--surface)] border border-border text-muted hover:text-foreground"
           onClick={() => setMessages([])}
         >
           Clear Session

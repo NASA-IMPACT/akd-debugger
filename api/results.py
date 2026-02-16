@@ -14,6 +14,9 @@ from models.run import Run
 from models.trace_log import TraceLog
 from schemas.schemas import ResultListOut, ResultOut
 from services.db_utils import get_or_404
+from services.context import get_request_context
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter
 
 router = APIRouter()
 
@@ -23,6 +26,7 @@ def _base_result_id(result: Result) -> int:
 
 
 async def _load_result_with_context(result_id: int, db: AsyncSession) -> Result | None:
+    ctx = get_request_context()
     stmt = (
         select(Result)
         .where(Result.id == result_id)
@@ -32,17 +36,21 @@ async def _load_result_with_context(result_id: int, db: AsyncSession) -> Result 
             selectinload(Result.run).selectinload(Run.agent_config),
         )
     )
+    stmt = apply_workspace_filter(stmt, Result, ctx)
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
 @router.get("", response_model=list[ResultOut])
 async def list_results(run_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "results.read")
     stmt = (
         select(Result)
         .where(Result.run_id == run_id)
         .options(selectinload(Result.grade), selectinload(Result.query))
         .order_by(Result.query_id.asc(), Result.version_number.asc(), Result.created_at.asc())
     )
+    stmt = apply_workspace_filter(stmt, Result, ctx)
     rows = (await db.execute(stmt)).scalars().all()
     by_base: dict[int, list[Result]] = {}
     for row in rows:
@@ -66,12 +74,15 @@ async def list_results(run_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.get("/families", response_model=ResultListOut)
 async def list_results_with_families(run_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "results.read")
     stmt = (
         select(Result)
         .where(Result.run_id == run_id)
         .options(selectinload(Result.grade), selectinload(Result.query))
         .order_by(Result.query_id.asc(), Result.version_number.asc(), Result.created_at.asc())
     )
+    stmt = apply_workspace_filter(stmt, Result, ctx)
     rows = (await db.execute(stmt)).scalars().all()
     by_base: dict[int, list[Result]] = {}
     for row in rows:
@@ -98,11 +109,14 @@ async def list_results_with_families(run_id: int, db: AsyncSession = Depends(get
 
 @router.get("/{result_id}", response_model=ResultOut)
 async def get_result(result_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "results.read")
     stmt = (
         select(Result)
         .where(Result.id == result_id)
         .options(selectinload(Result.grade), selectinload(Result.query))
     )
+    stmt = apply_workspace_filter(stmt, Result, ctx)
     result = await db.execute(stmt)
     r = result.scalar_one_or_none()
     if not r:
@@ -112,6 +126,8 @@ async def get_result(result_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.post("/{result_id}/retry", response_model=ResultOut)
 async def retry_result(result_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "results.retry")
     current = await _load_result_with_context(result_id, db)
     if not current:
         raise HTTPException(404, "Result not found")
@@ -139,6 +155,9 @@ async def retry_result(result_id: int, db: AsyncSession = Depends(get_db)):
 
     started_at = datetime.now(timezone.utc)
     trace = TraceLog(
+        organization_id=base.organization_id,
+        project_id=base.project_id,
+        created_by_user_id=ctx.user.id,
         run_id=base.run_id,
         query_id=base.query_id,
         agent_config_id=agent.id,
@@ -181,6 +200,10 @@ async def retry_result(result_id: int, db: AsyncSession = Depends(get_db)):
     )
     max_version = (await db.execute(max_stmt)).scalar_one() or 1
     new_version = Result(
+        organization_id=base.organization_id,
+        project_id=base.project_id,
+        created_by_user_id=ctx.user.id,
+        visibility_scope=base.visibility_scope,
         run_id=base.run_id,
         query_id=base.query_id,
         parent_result_id=base.id,
@@ -205,6 +228,8 @@ async def retry_result(result_id: int, db: AsyncSession = Depends(get_db)):
 async def accept_result_version(
     result_id: int, version_id: int, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "results.accept_version")
     base = await _load_result_with_context(result_id, db)
     if not base:
         raise HTTPException(404, "Result not found")
@@ -236,6 +261,8 @@ async def accept_result_version(
 async def delete_result_version(
     result_id: int, version_id: int, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "results.delete_version")
     base = await _load_result_with_context(result_id, db)
     if not base:
         raise HTTPException(404, "Result not found")

@@ -27,7 +27,7 @@ export function CompareDashboard({ runIds }: Props) {
   return (
     <>
       {/* Accuracy Overview */}
-      <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+      <div className="bg-card rounded-lg p-6 px-8 mb-6">
         <div className="flex items-center justify-between mb-4 pb-2 border-b-2 border-border">
           <h2 className="text-lg font-semibold text-brand-dark">Accuracy Overview</h2>
           <button
@@ -79,7 +79,7 @@ export function CompareDashboard({ runIds }: Props) {
       </div>
 
       {/* Performance comparison (transposed: metrics as columns, agents as rows) */}
-      <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+      <div className="bg-card rounded-lg p-6 px-8 mb-6">
         <h2 className="text-lg font-semibold mb-4 pb-2 border-b-2 border-border text-brand-dark">Performance Stats</h2>
         <table className="w-full text-sm">
           <thead>
@@ -141,7 +141,7 @@ function ToolUsageComparison({ runs }: { runs: RunAnalyticsOut[] }) {
   });
 
   return (
-    <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+    <div className="bg-card rounded-lg p-6 px-8 mb-6">
       <h2 className="text-lg font-semibold mb-4 pb-2 border-b-2 border-border text-brand-dark">Tool Usage Across Runs</h2>
       <div className="flex gap-4 mb-4 text-sm">
         {runs.map((r, i) => (

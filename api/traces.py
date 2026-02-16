@@ -8,6 +8,9 @@ from schemas.schemas import TraceLogOut, TraceSummaryOut
 from services.openai_pricing import calculate_cost
 from services.trace_utils import trace_to_out
 from services.db_utils import get_or_404
+from services.context import get_request_context
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter
 
 router = APIRouter()
 
@@ -42,8 +45,11 @@ async def list_traces(
     limit: int = 200,
     db: AsyncSession = Depends(get_db),
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "traces.read")
     q = min(max(limit, 1), 1000)
     stmt = _apply_filters(stmt=select(TraceLog), run_id=run_id, status=status, trace_type=trace_type, agent_config_id=agent_config_id)
+    stmt = apply_workspace_filter(stmt, TraceLog, ctx)
     stmt = stmt.order_by(TraceLog.created_at.desc()).limit(q)
     result = await db.execute(stmt)
     return [trace_to_out(r) for r in result.scalars().all()]
@@ -57,6 +63,8 @@ async def traces_summary(
     agent_config_id: int | None = None,
     db: AsyncSession = Depends(get_db),
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "traces.read")
     stmt = _apply_filters(
         stmt=select(TraceLog).order_by(TraceLog.created_at.desc()),
         run_id=run_id,
@@ -64,6 +72,7 @@ async def traces_summary(
         trace_type=trace_type,
         agent_config_id=agent_config_id,
     )
+    stmt = apply_workspace_filter(stmt, TraceLog, ctx)
     traces = (await db.execute(stmt)).scalars().all()
     total_cost = 0.0
     missing = 0
@@ -83,5 +92,7 @@ async def traces_summary(
 
 @router.get("/{trace_id}", response_model=TraceLogOut)
 async def get_trace(trace_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "traces.read")
     trace = await get_or_404(db, TraceLog, trace_id, "Trace")
     return trace_to_out(trace)

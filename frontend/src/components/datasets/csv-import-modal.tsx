@@ -148,7 +148,7 @@ export function CsvImportModal({
       className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop"
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
-      <div className="bg-card border border-border rounded-2xl w-[90%] max-w-[700px] p-6 shadow-2xl modal-content max-h-[90vh] overflow-y-auto">
+      <div className="bg-card border border-border rounded-xl w-[90%] max-w-[700px] p-6 shadow-2xl modal-content max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex justify-between items-center mb-6">
           <div className="flex items-center gap-3">
@@ -160,7 +160,7 @@ export function CsvImportModal({
                 <ArrowLeft size={18} />
               </button>
             )}
-            <h3 className="text-xl font-semibold text-foreground">
+            <h3 className="text-lg font-semibold text-foreground">
               {step === 1 ? "Import CSV" : "Map Columns"}
             </h3>
           </div>
@@ -174,7 +174,7 @@ export function CsvImportModal({
 
         {step === 1 && (
           <div
-            className={`border-2 border-dashed rounded-xl p-12 text-center transition-colors cursor-pointer ${
+            className={`border-2 border-dashed rounded-lg p-12 text-center transition-colors cursor-pointer ${
               dragOver
                 ? "border-primary bg-primary/5"
                 : "border-border hover:border-muted-light"
@@ -350,14 +350,14 @@ export function CsvImportModal({
             <div className="flex justify-end gap-3">
               <button
                 type="button"
-                className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+                className="px-4 py-2 rounded-md font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
                 onClick={onClose}
               >
                 Cancel
               </button>
               <button
                 type="button"
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all disabled:opacity-50"
+                className="px-4 py-2 bg-primary text-primary-foreground rounded-md font-medium text-sm hover:brightness-110 transition-colors disabled:opacity-50"
                 disabled={!canImport}
                 onClick={handleImport}
               >

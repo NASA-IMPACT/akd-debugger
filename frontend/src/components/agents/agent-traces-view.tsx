@@ -58,7 +58,7 @@ export function AgentTracesView({ agentId }: Props) {
           </select>
           <button
             onClick={() => refetch()}
-            className="px-3 py-2 rounded-lg text-xs font-semibold bg-primary text-primary-foreground"
+            className="px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground"
           >
             Refresh
           </button>

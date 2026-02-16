@@ -168,7 +168,7 @@ export function SplitCompareModal({
                 type="button"
                 className={cn(
                   "px-3 py-1 rounded text-xs font-semibold transition-colors",
-                  view === "responses" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground"
+                  view === "responses" ? "bg-[var(--surface-hover)] text-foreground" : "text-muted hover:text-foreground"
                 )}
                 onClick={() => setView("responses")}
               >
@@ -178,7 +178,7 @@ export function SplitCompareModal({
                 type="button"
                 className={cn(
                   "px-3 py-1 rounded text-xs font-semibold transition-colors",
-                  view === "traces" ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground"
+                  view === "traces" ? "bg-[var(--surface-hover)] text-foreground" : "text-muted hover:text-foreground"
                 )}
                 onClick={() => setView("traces")}
               >

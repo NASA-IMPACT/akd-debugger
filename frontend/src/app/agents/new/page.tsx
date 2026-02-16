@@ -7,7 +7,7 @@ import { agentsApi } from "@/lib/api/agents";
 import { parseAgentCode } from "@/lib/parsers/parse-agent-code";
 import { PageHeader } from "@/components/layout/page-header";
 
-const inputCls = "w-full px-3 py-2 rounded-lg text-sm outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
+const inputCls = "w-full px-2.5 py-1.5 rounded-md text-[13px] outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
 
 export default function NewAgentPage() {
   const router = useRouter();
@@ -101,7 +101,7 @@ export default function NewAgentPage() {
     return (
       <>
         <PageHeader title="Clone Agent" backHref="/agents" backLabel="Agents" />
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <div className="skeleton h-5 w-48 mb-3" />
           <div className="skeleton h-4 w-32" />
         </div>
@@ -116,7 +116,7 @@ export default function NewAgentPage() {
       <form onSubmit={(e) => { e.preventDefault(); saveMutation.mutate(); }} className="space-y-5">
         {/* Input mode toggle (only for fresh create) */}
         {!cloneId && (
-          <div className="bg-card rounded-xl border border-border p-5">
+          <div className="bg-card rounded-lg border border-border p-5">
             <div className="flex gap-4 mb-4">
               <label className="flex items-center gap-1.5 text-sm cursor-pointer text-foreground">
                 <input type="radio" checked={inputMode === "paste"} onChange={() => setInputMode("paste")} className="accent-[var(--primary)]" /> Paste Code
@@ -131,7 +131,7 @@ export default function NewAgentPage() {
                 <label className="block font-medium text-sm text-muted mb-1.5">Paste OpenAI Agent Code</label>
                 <textarea className={`${inputCls} text-xs font-mono resize-y`} rows={12} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Paste your agent code here (Python or TypeScript)..." />
                 <div className="flex gap-2 mt-2">
-                  <button type="button" className="px-4 py-2 bg-card border border-border rounded-lg font-semibold text-sm hover:bg-[var(--surface-hover)] text-foreground transition-colors" onClick={extractFromCode}>Extract Config</button>
+                  <button type="button" className="btn-subtle" onClick={extractFromCode}>Extract Config</button>
                   {extractMsg && <span className={`text-sm self-center ${extractColor}`}>{extractMsg}</span>}
                 </div>
               </div>
@@ -140,7 +140,7 @@ export default function NewAgentPage() {
         )}
 
         {/* Name + Executor */}
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block font-medium text-sm text-muted mb-1.5">Name</label>
@@ -166,13 +166,13 @@ export default function NewAgentPage() {
         </div>
 
         {/* System Prompt */}
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <label className="block font-medium text-sm text-muted mb-2">System Prompt</label>
           <textarea className={`${inputCls} text-xs font-mono resize-y`} rows={10} value={agPrompt} onChange={(e) => setAgPrompt(e.target.value)} />
         </div>
 
         {/* Tools Config */}
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <label className="block font-medium text-sm text-muted mb-2">Tools Config (JSON)</label>
           <textarea
             className={`${inputCls} text-xs font-mono resize-y`}
@@ -184,7 +184,7 @@ export default function NewAgentPage() {
         </div>
 
         {/* Model Settings */}
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <label className="block font-medium text-sm text-muted mb-2">Model Settings (JSON)</label>
           <textarea
             className={`${inputCls} text-xs font-mono resize-y`}
@@ -197,10 +197,10 @@ export default function NewAgentPage() {
 
         {/* Actions */}
         <div className="flex justify-end gap-3">
-          <button type="button" onClick={() => router.push("/agents")} className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors">
+          <button type="button" onClick={() => router.push("/agents")} className="btn-subtle">
             Cancel
           </button>
-          <button type="submit" className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all disabled:opacity-50" disabled={saveMutation.isPending}>
+          <button type="submit" className="btn-subtle btn-subtle-primary disabled:opacity-50" disabled={saveMutation.isPending}>
             {saveMutation.isPending ? "Creating..." : "Create Agent"}
           </button>
         </div>

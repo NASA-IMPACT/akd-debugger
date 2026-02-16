@@ -106,7 +106,7 @@ export function CompareCard({
   }, [runs.length]);
 
   return (
-    <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+    <div className="bg-card rounded-lg p-6 px-8 mb-6">
       {/* Header */}
       <div className="border-b-2 border-border pb-3 mb-4">
         <span className="text-lg font-bold">
@@ -264,13 +264,13 @@ export function CompareCard({
                   {!r.is_default_version && (
                     <>
                       <button
-                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--tag-green-bg)] text-[var(--tag-green-text)]"
+                        className="px-2.5 py-1 rounded text-xs font-medium bg-[var(--tag-green-bg)] text-[var(--tag-green-text)]"
                         onClick={() => onAcceptVersion(base.id, r.id)}
                       >
                         Set default
                       </button>
                       <button
-                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--tag-orange-bg)] text-[var(--tag-orange-text)]"
+                        className="px-2.5 py-1 rounded text-xs font-medium bg-[var(--tag-orange-bg)] text-[var(--tag-orange-text)]"
                         onClick={() => {
                           const ok = window.confirm(
                             "This version will be deleted. Do you really want to continue?"

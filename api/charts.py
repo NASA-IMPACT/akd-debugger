@@ -6,6 +6,8 @@ import io
 from database import get_db
 from services.analytics import compute_run_analytics
 from services.charts import generate_accuracy_chart
+from services.context import get_request_context
+from services.permissions import require_permission
 
 router = APIRouter()
 
@@ -15,6 +17,8 @@ async def accuracy_chart(
     run_ids: str = Query(..., description="Comma-separated run IDs"),
     db: AsyncSession = Depends(get_db),
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "exports.read")
     ids = [int(x.strip()) for x in run_ids.split(",") if x.strip()]
     if not ids:
         raise HTTPException(400, "At least 1 run ID required")

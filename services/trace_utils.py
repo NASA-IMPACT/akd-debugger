@@ -21,6 +21,9 @@ def trace_to_out(trace: TraceLog) -> TraceLogOut:
     breakdown = calculate_cost(trace.model or "", trace.usage or {}, tool_calls)
     return TraceLogOut(
         id=trace.id,
+        organization_id=trace.organization_id,
+        project_id=trace.project_id,
+        created_by_user_id=trace.created_by_user_id,
         run_id=trace.run_id,
         query_id=trace.query_id,
         agent_config_id=trace.agent_config_id,
