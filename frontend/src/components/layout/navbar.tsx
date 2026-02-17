@@ -215,6 +215,8 @@ export function Navbar() {
   const { user, organizations, logout, refresh: refreshAuth } = useAuth();
   const { organizationId, setOrganizationId, projectId, setProjectId, projects, reloadProjects } = useWorkspace();
   const { theme, toggle } = useTheme();
+  const akdMarkSrc = theme === "light" ? "/AKDLogoLight.svg" : "/AKDLogo.svg";
+  const akdHeaderSrc = theme === "light" ? "/AKDHeaderLight.svg" : "/headerLogo.png";
   const queryClient = useQueryClient();
 
   const [notifOpen, setNotifOpen] = useState(false);
@@ -452,7 +454,7 @@ export function Navbar() {
           <div className="mx-auto max-w-[1520px] h-14 px-4 sm:px-6 flex items-center justify-between gap-3">
             <Link href="/" className="no-underline inline-flex items-center">
               <img
-                src="/headerLogo.png"
+                src={akdHeaderSrc}
                 alt="AKD logo"
                 width={132}
                 height={31}
@@ -486,7 +488,7 @@ export function Navbar() {
         <div className="h-14 px-4 flex items-center justify-between gap-3">
           <Link href="/" className="no-underline inline-flex items-center">
             <img
-              src="/headerLogo.png"
+              src={akdHeaderSrc}
               alt="AKD logo"
               width={132}
               height={31}
@@ -654,7 +656,7 @@ export function Navbar() {
           <Link href="/" className={cn("no-underline flex items-center", navCollapsed ? "justify-center" : "gap-2 py-1.5")}>
             {navCollapsed ? (
               <img
-                src="/AKDLogo.svg"
+                src={akdMarkSrc}
                 alt="AKD icon"
                 width={32}
                 height={15}
@@ -662,7 +664,7 @@ export function Navbar() {
               />
             ) : (
               <img
-                src="/headerLogo.png"
+                src={akdHeaderSrc}
                 alt="AKD logo"
                 width={132}
                 height={31}

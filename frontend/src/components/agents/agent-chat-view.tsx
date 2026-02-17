@@ -33,6 +33,7 @@ interface ChatMessageItem extends ChatMessage {
 
 interface Props {
   agentId: number;
+  agentName?: string;
 }
 
 type MessageSegment =
@@ -118,7 +119,7 @@ function MessageContent({ content, inverted = false }: { content: string; invert
   );
 }
 
-export function AgentChatView({ agentId }: Props) {
+export function AgentChatView({ agentId, agentName }: Props) {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [input, setInput] = useState("");
   const [toolModal, setToolModal] = useState<{ toolCalls: ToolCall[]; idx: number } | null>(null);
@@ -248,8 +249,13 @@ export function AgentChatView({ agentId }: Props) {
             ...m,
             content: (m.content || "") + delta,
           }));
-        } else if (eventType === "reasoning_delta") {
-          const delta = String(data.delta || "");
+        } else if (
+          eventType === "reasoning_delta" ||
+          eventType === "summary_delta" ||
+          eventType === "reasoning_summary_delta"
+        ) {
+          const delta = String(data.delta || data.summary || data.text || "");
+          if (!delta) return;
           updatePending((m) => {
             const prevReasoning = m.meta?.reasoning || [];
             const first = prevReasoning[0];
@@ -388,7 +394,9 @@ export function AgentChatView({ agentId }: Props) {
       }
     >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-        <div className="text-sm font-semibold text-foreground">Chat (session only)</div>
+        <div className="text-sm font-semibold text-foreground">
+          {agentName ? `Chat with ${agentName}` : "Chat (session only)"}
+        </div>
         <div className="flex items-center gap-2">
           <button
             className="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--surface)] border border-border text-muted hover:text-foreground inline-flex items-center gap-1.5"
@@ -430,7 +438,7 @@ export function AgentChatView({ agentId }: Props) {
                   m.role === "user"
                     ? "ml-auto w-fit max-w-[72%] rounded-2xl px-3.5 py-1.5 text-sm bg-primary text-primary-foreground"
                     : `${m.content && isWideMessageContent(m.content) ? "max-w-[92%]" : "max-w-[74%]"} chat-assistant-bubble rounded-2xl ${
-                        m.pending && !m.content ? "px-3 py-1.5" : "px-4 py-2.5"
+                        m.pending && !m.content && !m.pending_reasoning ? "px-3 py-1.5" : "px-4 py-2.5"
                       } text-sm text-foreground ${
                         m.pending ? "w-fit" : ""
                       }`
@@ -440,6 +448,11 @@ export function AgentChatView({ agentId }: Props) {
                   <div className="space-y-0.5">
                     {m.content ? (
                       <MessageContent content={m.content} inverted={m.role === "user"} />
+                    ) : m.pending_reasoning?.trim() ? (
+                      <div className="space-y-1.5">
+                        <div className="text-[11px] text-muted-light">Thinking summary</div>
+                        <MessageContent content={m.pending_reasoning} inverted={m.role === "user"} />
+                      </div>
                     ) : (
                       (() => {
                         const recent = (m.pending_events || []).slice(-3);

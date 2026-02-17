@@ -137,10 +137,20 @@ function getToolsList(a: AgentOut): string[] {
 // View sections
 // ---------------------------------------------------------------------------
 
-function GeneralView({ agent }: { agent: AgentOut }) {
+function GeneralView({
+  agent,
+  onRequestEdit,
+}: {
+  agent: AgentOut;
+  onRequestEdit?: () => void;
+}) {
   const tools = getToolsList(agent);
   return (
-    <div className="space-y-6 p-6">
+    <div
+      className="space-y-6 p-6"
+      onDoubleClick={onRequestEdit}
+      title={onRequestEdit ? "Double-click to edit" : undefined}
+    >
       <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-x-8 gap-y-4">
         <InfoItem label="Name" value={agent.name} />
         <InfoItem
@@ -268,7 +278,13 @@ function useTokenCount(text: string | null | undefined) {
   return count;
 }
 
-function PromptView({ agent }: { agent: AgentOut }) {
+function PromptView({
+  agent,
+  onRequestEdit,
+}: {
+  agent: AgentOut;
+  onRequestEdit?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
 
   if (!agent.system_prompt) {
@@ -292,6 +308,8 @@ function PromptView({ agent }: { agent: AgentOut }) {
         fontFamily:
           "var(--font-roboto-condensed), 'Roboto Condensed', sans-serif",
       }}
+      onDoubleClick={onRequestEdit}
+      title={onRequestEdit ? "Double-click to edit prompt" : undefined}
     >
       <button
         onClick={handleCopy}
@@ -312,12 +330,22 @@ function PromptView({ agent }: { agent: AgentOut }) {
   );
 }
 
-function ToolsView({ agent }: { agent: AgentOut }) {
+function ToolsView({
+  agent,
+  onRequestEdit,
+}: {
+  agent: AgentOut;
+  onRequestEdit?: () => void;
+}) {
   if (!agent.tools_config) {
     return <EmptySection label="No tools configured" />;
   }
   return (
-    <div className="p-6">
+    <div
+      className="p-6"
+      onDoubleClick={onRequestEdit}
+      title={onRequestEdit ? "Double-click to edit" : undefined}
+    >
       <div className="jt-root font-mono text-sm leading-relaxed">
         <JsonTree data={agent.tools_config} defaultOpen maxOpenDepth={3} />
       </div>
@@ -325,12 +353,22 @@ function ToolsView({ agent }: { agent: AgentOut }) {
   );
 }
 
-function SettingsView({ agent }: { agent: AgentOut }) {
+function SettingsView({
+  agent,
+  onRequestEdit,
+}: {
+  agent: AgentOut;
+  onRequestEdit?: () => void;
+}) {
   if (!agent.model_settings || Object.keys(agent.model_settings).length === 0) {
     return <EmptySection label="No model settings configured" />;
   }
   return (
-    <div className="p-6">
+    <div
+      className="p-6"
+      onDoubleClick={onRequestEdit}
+      title={onRequestEdit ? "Double-click to edit" : undefined}
+    >
       <div className="jt-root font-mono text-sm leading-relaxed">
         <JsonTree data={agent.model_settings} defaultOpen maxOpenDepth={3} />
       </div>
@@ -346,7 +384,13 @@ function EmptySection({ label }: { label: string }) {
   );
 }
 
-function PasteCodeView({ agent }: { agent: AgentOut }) {
+function PasteCodeView({
+  agent,
+  onRequestEdit,
+}: {
+  agent: AgentOut;
+  onRequestEdit?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const highlighted = useMemo(() => {
     if (!agent.source_code) return "";
@@ -373,7 +417,11 @@ function PasteCodeView({ agent }: { agent: AgentOut }) {
     return <EmptySection label="No pasted code saved for this agent" />;
   }
   return (
-    <div className="p-6 relative">
+    <div
+      className="p-6 relative"
+      onDoubleClick={onRequestEdit}
+      title={onRequestEdit ? "Double-click to edit" : undefined}
+    >
       <button
         onClick={handleCopyCode}
         className="absolute top-9 right-9 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
@@ -475,14 +523,33 @@ function PromptEdit({
   setForm: (f: FormState) => void;
 }) {
   return (
-    <div className="flex-1 flex flex-col min-h-0">
-      <textarea
-        className="w-full flex-1 px-6 py-4 text-sm font-mono outline-none resize-none bg-transparent text-foreground placeholder:text-muted-light leading-relaxed"
-        value={form.prompt}
-        onChange={(e) => setForm({ ...form, prompt: e.target.value })}
-        placeholder="Enter system prompt..."
-        spellCheck={false}
-      />
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="px-6 py-2 border-b border-border/20 text-[11px] text-muted-light uppercase tracking-wider">
+        Live Markdown Preview
+      </div>
+      <div className="flex-1 min-h-0 grid grid-cols-1 lg:grid-cols-2">
+        <div className="min-h-0 lg:border-r border-border/20">
+          <textarea
+            className="w-full h-full px-6 py-4 text-sm font-mono outline-none resize-none bg-transparent text-foreground placeholder:text-muted-light leading-relaxed"
+            value={form.prompt}
+            onChange={(e) => setForm({ ...form, prompt: e.target.value })}
+            placeholder="Enter system prompt..."
+            spellCheck={false}
+          />
+        </div>
+        <div className="min-h-0 overflow-auto p-6 prompt-markdown text-foreground text-base">
+          {form.prompt.trim() ? (
+            <MarkdownRenderer
+              content={form.prompt}
+              className="max-w-none [&_pre]:bg-[var(--surface-hover)] [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_code]:bg-[var(--surface-hover)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm"
+            />
+          ) : (
+            <div className="text-sm text-muted-light italic">
+              Markdown preview will appear here as you type.
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -772,6 +839,23 @@ export default function AgentDetailPage() {
     },
   });
 
+  useEffect(() => {
+    const handleSaveShortcut = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.key.toLowerCase() !== "s") return;
+      if (!editing || !form || saveMutation.isPending) return;
+      const editableSection = active !== "traces" && active !== "chat";
+      if (!editableSection) return;
+      event.preventDefault();
+      saveMutation.mutate();
+    };
+
+    window.addEventListener("keydown", handleSaveShortcut);
+    return () => {
+      window.removeEventListener("keydown", handleSaveShortcut);
+    };
+  }, [editing, active, form, saveMutation]);
+
   // ---------- Loading / Error ----------
   if (isLoading) {
     return (
@@ -1019,19 +1103,19 @@ export default function AgentDetailPage() {
                 )
               ) : // View mode
               active === "general" ? (
-                <GeneralView agent={agent} />
+                <GeneralView agent={agent} onRequestEdit={startEditing} />
               ) : active === "prompt" ? (
-                <PromptView agent={agent} />
+                <PromptView agent={agent} onRequestEdit={startEditing} />
               ) : active === "tools" ? (
-                <ToolsView agent={agent} />
+                <ToolsView agent={agent} onRequestEdit={startEditing} />
               ) : active === "paste" ? (
-                <PasteCodeView agent={agent} />
+                <PasteCodeView agent={agent} onRequestEdit={startEditing} />
               ) : active === "traces" ? (
                 <AgentTracesView agentId={agent.id} />
               ) : active === "chat" ? (
-                <AgentChatView agentId={agent.id} />
+                <AgentChatView agentId={agent.id} agentName={agent.name} />
               ) : (
-                <SettingsView agent={agent} />
+                <SettingsView agent={agent} onRequestEdit={startEditing} />
               )}
             </div>
           </div>

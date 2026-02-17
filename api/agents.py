@@ -5,13 +5,16 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from executors.registry import get_executor
 from models.agent import AgentConfig
+from models.project import Project
+from models.project_membership import ProjectMembership
 from models.trace_log import TraceLog
+from models.user_permission_grant import UserPermissionGrant
 from schemas.schemas import (
     AgentChatRequest,
     AgentChatResponse,
@@ -23,7 +26,7 @@ from schemas.schemas import (
 from services.openai_pricing import calculate_cost
 from services.trace_utils import trace_to_out
 from services.db_utils import get_or_404
-from services.context import get_request_context
+from services.context import WorkspaceContext, get_request_context
 from services.error_format import format_exception_details
 from services.openai_tools import build_openai_tools
 from services.permissions import require_permission
@@ -200,6 +203,59 @@ def _usage_to_dict(usage) -> dict | None:
         return None
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+async def _resolve_project_import_context(
+    db: AsyncSession,
+    ctx: WorkspaceContext,
+    source_project_id: int,
+) -> WorkspaceContext:
+    project = await db.get(Project, source_project_id)
+    if not project or project.organization_id != ctx.organization_id:
+        raise HTTPException(404, "Source project not found in organization")
+
+    membership = (
+        await db.execute(
+            select(ProjectMembership).where(
+                ProjectMembership.organization_id == ctx.organization_id,
+                ProjectMembership.project_id == source_project_id,
+                ProjectMembership.user_id == ctx.user.id,
+                ProjectMembership.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not membership and not ctx.is_org_admin:
+        grant_stmt = select(UserPermissionGrant.id).where(
+            UserPermissionGrant.organization_id == ctx.organization_id,
+            UserPermissionGrant.user_id == ctx.user.id,
+            or_(
+                UserPermissionGrant.project_id.is_(None),
+                UserPermissionGrant.project_id == source_project_id,
+            ),
+            or_(
+                UserPermissionGrant.expires_at.is_(None),
+                UserPermissionGrant.expires_at > _utcnow(),
+            ),
+        )
+        has_any_grant = (
+            await db.execute(grant_stmt.limit(1))
+        ).scalar_one_or_none() is not None
+        if not has_any_grant:
+            raise HTTPException(403, "You are not a member of the source project")
+
+    return WorkspaceContext(
+        user=ctx.user,
+        organization_id=ctx.organization_id,
+        project_id=source_project_id,
+        organization_membership=ctx.organization_membership,
+        project_membership=membership,
+        is_org_admin=ctx.is_org_admin,
+    )
+
+
 @router.post("/parse-code")
 async def parse_code(body: ParseCodeRequest):
     try:
@@ -215,6 +271,27 @@ async def list_agents(tag: str | None = None, db: AsyncSession = Depends(get_db)
     await require_permission(db, ctx, "agents.read")
     stmt = select(AgentConfig)
     stmt = apply_workspace_filter(stmt, AgentConfig, ctx)
+    if tag:
+        stmt = stmt.where(AgentConfig.tags.overlap([tag]))
+    stmt = stmt.order_by(AgentConfig.created_at.desc())
+    result = await db.execute(stmt)
+    return [AgentOut.model_validate(a) for a in result.scalars().all()]
+
+
+@router.get("/importable", response_model=list[AgentOut])
+async def list_importable_agents(
+    source_project_id: int,
+    tag: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    ctx = get_request_context()
+    source_ctx = await _resolve_project_import_context(db, ctx, source_project_id)
+    await require_permission(db, source_ctx, "agents.read")
+
+    stmt = select(AgentConfig).where(
+        AgentConfig.organization_id == ctx.organization_id,
+        AgentConfig.project_id == source_project_id,
+    )
     if tag:
         stmt = stmt.where(AgentConfig.tags.overlap([tag]))
     stmt = stmt.order_by(AgentConfig.created_at.desc())

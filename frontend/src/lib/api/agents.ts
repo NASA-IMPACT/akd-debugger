@@ -15,6 +15,12 @@ export const agentsApi = {
   get: (id: number) =>
     apiFetch<AgentOut>(`/api/agents/${id}`),
 
+  listImportable: (sourceProjectId: number, tag?: string) => {
+    const qs = new URLSearchParams({ source_project_id: String(sourceProjectId) });
+    if (tag) qs.set("tag", tag);
+    return apiFetch<AgentOut[]>(`/api/agents/importable?${qs.toString()}`);
+  },
+
   create: (body: AgentCreate) =>
     apiFetch<AgentOut>("/api/agents", { method: "POST", body: JSON.stringify(body) }),
 
