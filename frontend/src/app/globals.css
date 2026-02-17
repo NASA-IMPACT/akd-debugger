@@ -159,7 +159,7 @@
   --color-json-null: var(--json-null);
 
   --font-sans: var(--font-manrope), var(--font-space-grotesk), "Segoe UI", sans-serif;
-  --font-mono: var(--font-ibm-plex-mono), "SF Mono", Monaco, Consolas, "Courier New", monospace;
+  --font-mono: var(--font-jetbrains-mono), var(--font-ibm-plex-mono), "SF Mono", Monaco, Consolas, "Courier New", monospace;
 }
 
 * {

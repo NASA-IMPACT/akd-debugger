@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Space_Grotesk, Manrope, IBM_Plex_Mono } from "next/font/google";
+import { Space_Grotesk, Manrope, IBM_Plex_Mono, JetBrains_Mono } from "next/font/google";
 import { Suspense } from "react";
 import "./globals.css";
 import { AuthProvider } from "@/providers/auth-provider";
@@ -18,6 +18,11 @@ const ibmPlexMono = IBM_Plex_Mono({
   variable: "--font-ibm-plex-mono",
   weight: ["400", "500", "600"],
 });
+const jetBrainsMono = JetBrains_Mono({
+  subsets: ["latin"],
+  variable: "--font-jetbrains-mono",
+  weight: ["400", "500", "600"],
+});
 
 export const metadata: Metadata = {
   title: "AKD",
@@ -32,7 +37,7 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${spaceGrotesk.variable} ${manrope.variable} ${ibmPlexMono.variable}`}
+      className={`${spaceGrotesk.variable} ${manrope.variable} ${ibmPlexMono.variable} ${jetBrainsMono.variable}`}
       suppressHydrationWarning
     >
       <head>

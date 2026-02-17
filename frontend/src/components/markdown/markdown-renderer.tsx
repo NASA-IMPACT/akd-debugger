@@ -3,7 +3,7 @@
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
-const defaultCls = "prose prose-sm max-w-none text-foreground [&_pre]:bg-[var(--surface-hover)] [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_code]:bg-[var(--surface-hover)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_p]:my-1";
+const defaultCls = "prose prose-sm max-w-none text-foreground [&_pre]:font-mono [&_pre]:bg-[var(--surface-hover)] [&_pre]:p-3 [&_pre]:rounded-md [&_pre]:overflow-x-auto [&_code]:font-mono [&_code]:bg-[var(--surface-hover)] [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:rounded [&_code]:text-sm [&_p]:my-1";
 
 interface Props {
   content: string | null;
@@ -25,6 +25,17 @@ export function MarkdownRenderer({ content, className }: Props) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          code({ children, className }) {
+            const isBlock = Boolean(className);
+            return (
+              <code
+                className={`${className || ""} font-mono ${isBlock ? "text-sm leading-relaxed" : "rounded bg-[var(--surface-hover)] px-1.5 py-0.5 text-sm"}`.trim()}
+                style={{ fontFamily: "var(--font-mono)" }}
+              >
+                {children}
+              </code>
+            );
+          },
           table({ children }) {
             return (
               <div className="my-2 overflow-x-auto rounded-md border border-border">

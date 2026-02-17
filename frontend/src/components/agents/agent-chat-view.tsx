@@ -9,7 +9,7 @@ import { ToolPills } from "@/components/tool-calls/tool-pills";
 import { ToolModal } from "@/components/tool-calls/tool-modal";
 import { ReasoningDisplay } from "@/components/grading/reasoning-display";
 import { UsageSummary } from "@/components/usage/usage-summary";
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Maximize2, Minimize2 } from "lucide-react";
 
 interface MessageMeta {
   tool_calls?: ToolCall[];
@@ -97,7 +97,7 @@ function isWideMessageContent(content: string): boolean {
 function MessageContent({ content, inverted = false }: { content: string; inverted?: boolean }) {
   const segments = useMemo(() => splitMessageSegments(content), [content]);
   const markdownCls = inverted
-    ? "prose prose-sm max-w-none text-white [&_*]:text-white [&_strong]:text-white [&_em]:text-white/95 [&_a]:text-white [&_code]:text-white [&_code]:bg-white/15 [&_pre]:bg-white/10 [&_p]:my-1"
+    ? "prose prose-sm max-w-none text-white [&_*]:text-white [&_strong]:text-white [&_em]:text-white/95 [&_a]:text-white [&_code]:font-mono [&_code]:text-white [&_code]:bg-white/15 [&_pre]:font-mono [&_pre]:bg-white/10 [&_p]:my-1"
     : undefined;
   const jsonCls = inverted
     ? "jt-root font-mono text-sm leading-relaxed text-white [&_.text-json-key]:text-white [&_.text-json-string]:text-white [&_.text-json-number]:text-white [&_.text-json-bool]:text-white [&_.text-json-null]:text-white"
@@ -146,6 +146,7 @@ export function AgentChatView({ agentId }: Props) {
   const [toolModal, setToolModal] = useState<{ toolCalls: ToolCall[]; idx: number } | null>(null);
   const [detailsModal, setDetailsModal] = useState<ChatMessageItem | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -171,6 +172,20 @@ export function AgentChatView({ agentId }: Props) {
     }, 0);
     return () => window.clearTimeout(id);
   }, []);
+
+  useEffect(() => {
+    if (!isExpanded) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setIsExpanded(false);
+    };
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isExpanded]);
 
   const sendMessage = async () => {
     const text = input.trim();
@@ -378,15 +393,39 @@ export function AgentChatView({ agentId }: Props) {
   };
 
   return (
-    <div className="h-full flex flex-col">
+    <>
+    {isExpanded && (
+      <div
+        className="fixed inset-0 z-[980] bg-black/40"
+        onClick={() => setIsExpanded(false)}
+        aria-hidden="true"
+      />
+    )}
+    <div
+      className={
+        isExpanded
+          ? "fixed inset-4 z-[1000] flex flex-col rounded-xl border border-border bg-card shadow-2xl"
+          : "h-full flex flex-col"
+      }
+    >
       <div className="flex items-center justify-between px-4 py-3 border-b border-border">
         <div className="text-sm font-semibold text-foreground">Chat (session only)</div>
-        <button
-          className="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--surface)] border border-border text-muted hover:text-foreground"
-          onClick={() => setMessages([])}
-        >
-          Clear Session
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            className="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--surface)] border border-border text-muted hover:text-foreground inline-flex items-center gap-1.5"
+            onClick={() => setIsExpanded((v) => !v)}
+            title={isExpanded ? "Collapse chat" : "Expand chat"}
+          >
+            {isExpanded ? <Minimize2 size={13} /> : <Maximize2 size={13} />}
+            {isExpanded ? "Collapse" : "Expand"}
+          </button>
+          <button
+            className="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--surface)] border border-border text-muted hover:text-foreground"
+            onClick={() => setMessages([])}
+          >
+            Clear Session
+          </button>
+        </div>
       </div>
 
       <div ref={messagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
@@ -551,5 +590,6 @@ export function AgentChatView({ agentId }: Props) {
         </div>
       </div>
     </div>
+    </>
   );
 }
