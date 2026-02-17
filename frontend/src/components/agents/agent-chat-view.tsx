@@ -428,80 +428,76 @@ export function AgentChatView({ agentId }: Props) {
         </div>
       </div>
 
-      <div ref={messagesRef} className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && (
-          <div className="text-sm text-muted">No messages yet.</div>
-        )}
-        {messages.map((m) => (
-          <div key={m.id} className="space-y-2">
-            <div
-              className={
-                m.role === "user"
-                  ? "ml-auto w-fit max-w-[65%] rounded-xl px-3 py-2 text-sm bg-primary text-white"
-                  : `${m.content && isWideMessageContent(m.content) ? "max-w-[92%]" : "max-w-[65%]"} rounded-xl px-3 py-2 text-sm bg-[var(--surface)] border border-border text-foreground ${
-                      m.pending ? "w-fit" : ""
-                    }`
-              }
-            >
-              {m.pending ? (
-                <div className="space-y-1">
-                  {m.content ? (
-                    <MessageContent content={m.content} inverted={m.role === "user"} />
-                  ) : (
-                    (() => {
-                      const recent = (m.pending_events || []).slice(-3);
-                      const activeAction =
-                        m.pending_status || recent[recent.length - 1] || "";
-                      const history = recent
-                        .filter((evt, idx) => !(evt === activeAction && idx === recent.length - 1))
-                        .slice(-2);
-                      return (
-                        <>
-                          {!!history.length && (
-                            <div className="text-[11px] text-muted-light space-y-0.5">
-                              {history.map((evt, i) => (
-                                <div key={`${m.id}-evt-${i}`}>• {evt}</div>
-                              ))}
+      <div ref={messagesRef} className="flex-1 overflow-y-auto">
+        <div
+          className={
+            isExpanded
+              ? "mx-auto w-full max-w-[980px] px-10 py-8 space-y-4"
+              : "mx-auto w-full px-8 py-6 lg:px-10 lg:py-7 space-y-4"
+          }
+        >
+          {messages.length === 0 && (
+            <div className="text-sm text-muted">No messages yet.</div>
+          )}
+          {messages.map((m) => (
+            <div key={m.id} className="space-y-2">
+              <div
+                className={
+                  m.role === "user"
+                    ? "ml-auto w-fit max-w-[72%] rounded-2xl px-3.5 py-1.5 text-sm bg-primary text-primary-foreground"
+                    : `${m.content && isWideMessageContent(m.content) ? "max-w-[92%]" : "max-w-[74%]"} chat-assistant-bubble rounded-2xl px-4 py-2.5 text-sm text-foreground ${
+                        m.pending ? "w-fit" : ""
+                      }`
+                }
+              >
+                {m.pending ? (
+                  <div className="space-y-1">
+                    {m.content ? (
+                      <MessageContent content={m.content} inverted={m.role === "user"} />
+                    ) : (
+                      (() => {
+                        const recent = (m.pending_events || []).slice(-3);
+                        const activeAction =
+                          m.pending_status || recent[recent.length - 1] || "";
+                        const showActiveStatus =
+                          !!activeAction &&
+                          activeAction.trim().toLowerCase() !== "thinking";
+                        const history = recent
+                          .filter((evt, idx) => !(evt === activeAction && idx === recent.length - 1))
+                          .slice(-2);
+                        return (
+                          <>
+                            {!!history.length && (
+                              <div className="text-[11px] text-muted-light space-y-0.5">
+                                {history.map((evt, i) => (
+                                  <div key={`${m.id}-evt-${i}`}>• {evt}</div>
+                                ))}
+                              </div>
+                            )}
+                            <div className="min-h-[16px] text-[12px] text-muted-light">
+                              {showActiveStatus ? activeAction : ""}
                             </div>
-                          )}
-                          {!!activeAction ? (
-                            <div className="inline-flex items-center gap-1.5 text-[14px] font-medium text-black dark:text-foreground">
-                              <span>{activeAction}</span>
-                              <span className="inline-flex items-center gap-0.5 text-black/70 dark:text-foreground/70">
-                                <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-                                <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:120ms]" />
-                                <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:240ms]" />
-                              </span>
-                            </div>
-                          ) : (
-                            <div className="inline-flex items-center gap-1.5 text-[14px] font-medium text-black dark:text-foreground">
-                              <span>Thinking</span>
-                              <span className="inline-flex items-center gap-0.5 text-black/70 dark:text-foreground/70">
-                                <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:0ms]" />
-                                <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:120ms]" />
-                                <span className="w-1 h-1 rounded-full bg-current animate-bounce [animation-delay:240ms]" />
-                              </span>
-                            </div>
-                          )}
-                        </>
-                      );
-                    })()
-                  )}
-                </div>
-              ) : (
-                <MessageContent content={m.content} inverted={m.role === "user"} />
-              )}
-            </div>
-            {m.role === "assistant" && !m.pending && m.meta && (
+                            <div className="chat-thinking-gradient text-[15px] font-semibold">Thinking</div>
+                          </>
+                        );
+                      })()
+                    )}
+                  </div>
+                ) : (
+                  <MessageContent content={m.content} inverted={m.role === "user"} />
+                )}
+              </div>
+              {m.role === "assistant" && !m.pending && m.meta && (
               <button
                 className="text-xs text-muted hover:text-foreground font-semibold"
                 onClick={() => setDetailsModal(m)}
               >
-                Expand more
+                Show thinking
               </button>
             )}
-          </div>
-        ))}
+            </div>
+          ))}
+        </div>
       </div>
 
       {toolModal && (
@@ -564,8 +560,8 @@ export function AgentChatView({ agentId }: Props) {
         </div>
       )}
 
-      <div className="px-4 py-3 border-t border-border">
-        <div className="relative flex items-center">
+      <div className={isExpanded ? "px-8 py-4 border-t border-border" : "px-6 py-4 border-t border-border"}>
+        <div className={isExpanded ? "relative flex items-center mx-auto max-w-[980px]" : "relative flex items-center"}>
           <input
             type="text"
             className="w-full h-10 rounded-full border border-border bg-[var(--surface)] pl-4 pr-12 text-sm text-foreground outline-none"

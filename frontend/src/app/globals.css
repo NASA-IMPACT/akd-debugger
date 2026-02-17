@@ -568,6 +568,46 @@ a {
   }
 }
 
+@keyframes thinking-gradient-flow {
+  0% {
+    background-position: -140% 50%;
+  }
+
+  100% {
+    background-position: 140% 50%;
+  }
+}
+
+.chat-thinking-gradient {
+  display: inline-block;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  background-image: linear-gradient(
+    110deg,
+    color-mix(in srgb, var(--muted-light) 92%, transparent) 15%,
+    color-mix(in srgb, var(--foreground) 35%, #93c5fd 65%) 38%,
+    color-mix(in srgb, var(--foreground) 8%, #ffffff 92%) 50%,
+    color-mix(in srgb, var(--foreground) 35%, #93c5fd 65%) 62%,
+    color-mix(in srgb, var(--muted-light) 92%, transparent) 85%
+  );
+  background-size: 260% 100%;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: thinking-gradient-flow 1.55s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-thinking-gradient {
+    animation: none;
+  }
+}
+
+.chat-assistant-bubble {
+  background: var(--background);
+}
+
 .clean-section {
   padding: 0.75rem 0 1.25rem;
   border-bottom: 1px solid var(--border);

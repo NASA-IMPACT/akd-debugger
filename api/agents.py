@@ -24,6 +24,8 @@ from services.openai_pricing import calculate_cost
 from services.trace_utils import trace_to_out
 from services.db_utils import get_or_404
 from services.context import get_request_context
+from services.error_format import format_exception_details
+from services.openai_tools import build_openai_tools
 from services.permissions import require_permission
 from services.tenancy import apply_workspace_filter, assign_workspace_fields
 
@@ -322,44 +324,16 @@ async def chat_with_agent_stream(
 
     from agents import (
         Agent,
-        HostedMCPTool,
         ModelSettings,
         RunConfig,
         Runner,
-        WebSearchTool,
     )
     from openai.types.shared.reasoning import Reasoning
 
-    tools = []
-    tc_raw = agent.tools_config
-    tc_list: list[dict] = []
-    if isinstance(tc_raw, list):
-        tc_list = tc_raw
-    elif isinstance(tc_raw, dict):
-        tc_list = [tc_raw]
-    for tc in tc_list:
-        if not isinstance(tc, dict):
-            continue
-        tool_type = tc.get("type")
-        if tool_type == "mcp":
-            tools.append(
-                HostedMCPTool(
-                    tool_config={
-                        "type": "mcp",
-                        "server_label": tc.get("server_label", "MCP Server"),
-                        "allowed_tools": tc.get("allowed_tools", []),
-                        "require_approval": "never",
-                        "server_url": tc.get("server_url", ""),
-                    }
-                )
-            )
-        elif tool_type == "web_search":
-            ws_kwargs: dict = {}
-            if tc.get("user_location"):
-                ws_kwargs["user_location"] = tc["user_location"]
-            if tc.get("search_context_size"):
-                ws_kwargs["search_context_size"] = tc["search_context_size"]
-            tools.append(WebSearchTool(**ws_kwargs))
+    try:
+        tools = build_openai_tools(agent.tools_config)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     ms_raw = agent.model_settings or {}
     ms_kwargs = {}
@@ -539,14 +513,15 @@ async def chat_with_agent_stream(
             trace.completed_at = completed_at
             trace.latency_ms = int((completed_at - started_at).total_seconds() * 1000)
             trace.status = "failed"
-            trace.error = str(exc)
+            formatted_error = format_exception_details(exc)
+            trace.error = formatted_error
             trace.response_payload = {
                 "response": full_text,
                 "tool_calls": tool_calls,
                 "reasoning": [{"summary": ["".join(reasoning_chunks)]}] if reasoning_chunks else [],
             }
             await db.commit()
-            yield f"event: error\ndata: {json.dumps({'error': str(exc), 'trace_log_id': trace.id})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'error': formatted_error, 'trace_log_id': trace.id})}\n\n"
 
     return StreamingResponse(
         event_stream(),

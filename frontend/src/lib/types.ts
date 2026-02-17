@@ -68,7 +68,7 @@ export interface AgentOut {
   model: string;
   system_prompt: string | null;
   source_code: string | null;
-  tools_config: Record<string, unknown> | null;
+  tools_config: Record<string, unknown> | Record<string, unknown>[] | null;
   model_settings: Record<string, unknown> | null;
   tags: string[];
   created_at: string;
@@ -80,7 +80,7 @@ export interface AgentCreate {
   model: string;
   system_prompt?: string | null;
   source_code?: string | null;
-  tools_config?: Record<string, unknown> | null;
+  tools_config?: Record<string, unknown> | Record<string, unknown>[] | null;
   model_settings?: Record<string, unknown> | null;
   tags?: string[];
   visibility_scope?: "project" | "organization";
@@ -92,7 +92,7 @@ export interface AgentUpdate {
   model?: string | null;
   system_prompt?: string | null;
   source_code?: string | null;
-  tools_config?: Record<string, unknown> | null;
+  tools_config?: Record<string, unknown> | Record<string, unknown>[] | null;
   model_settings?: Record<string, unknown> | null;
   tags?: string[] | null;
   visibility_scope?: "project" | "organization" | null;

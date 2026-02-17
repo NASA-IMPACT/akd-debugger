@@ -47,6 +47,39 @@ hljs.registerLanguage("typescript", typescript);
 const highlightCode = (code: string) =>
   hljs.highlightAuto(code, ["python", "typescript"]).value;
 
+function detectCodeLanguage(code: string): string {
+  const language = hljs.highlightAuto(code, ["python", "typescript"]).language;
+  if (language === "python" || language === "typescript") return language;
+  return "";
+}
+
+function formatCodeForClipboard(code: string): string {
+  const normalized = code.replace(/\r\n?/g, "\n").trim();
+  if (!normalized) return "";
+  const language = detectCodeLanguage(normalized);
+  return language
+    ? `\`\`\`${language}\n${normalized}\n\`\`\``
+    : `\`\`\`\n${normalized}\n\`\`\``;
+}
+
+async function copyTextToClipboard(text: string): Promise<void> {
+  if (!text) return;
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.setAttribute("readonly", "");
+  ta.style.position = "absolute";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand("copy");
+  document.body.removeChild(ta);
+}
+
 // ---------------------------------------------------------------------------
 // Types & constants
 // ---------------------------------------------------------------------------
@@ -242,10 +275,14 @@ function PromptView({ agent }: { agent: AgentOut }) {
     return <EmptySection label="No system prompt configured" />;
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(agent.system_prompt!);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleCopy = async () => {
+    try {
+      await copyTextToClipboard(agent.system_prompt!);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
   };
 
   return (
@@ -310,17 +347,50 @@ function EmptySection({ label }: { label: string }) {
 }
 
 function PasteCodeView({ agent }: { agent: AgentOut }) {
+  const [copied, setCopied] = useState(false);
   const highlighted = useMemo(() => {
     if (!agent.source_code) return "";
     return hljs.highlightAuto(agent.source_code, ["python", "typescript"])
       .value;
   }, [agent.source_code]);
+  const formattedCode = useMemo(
+    () => formatCodeForClipboard(agent.source_code || ""),
+    [agent.source_code],
+  );
+
+  const handleCopyCode = async () => {
+    if (!formattedCode) return;
+    try {
+      await copyTextToClipboard(formattedCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   if (!agent.source_code) {
     return <EmptySection label="No pasted code saved for this agent" />;
   }
   return (
-    <div className="p-6">
+    <div className="p-6 relative">
+      <button
+        onClick={handleCopyCode}
+        className="absolute top-9 right-9 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+        title="Copy formatted code"
+      >
+        {copied ? (
+          <>
+            <Check size={13} className="text-green-500" />
+            Copied
+          </>
+        ) : (
+          <>
+            <Copy size={13} />
+            Copy Code
+          </>
+        )}
+      </button>
       <pre className="rounded-lg border border-border max-h-[70vh] overflow-y-auto !m-0">
         <code
           className="hljs text-xs !leading-relaxed"
@@ -466,6 +536,7 @@ function PasteCodeEdit({
   form: FormState;
   setForm: (f: FormState) => void;
 }) {
+  const [copied, setCopied] = useState(false);
   const [msg, setMsg] = useState("");
   const [msgColor, setMsgColor] = useState("text-success");
   const [extracting, setExtracting] = useState(false);
@@ -515,9 +586,34 @@ function PasteCodeEdit({
     }
   };
 
+  const copyCode = async () => {
+    const formatted = formatCodeForClipboard(form.sourceCode);
+    if (!formatted) return;
+    try {
+      await copyTextToClipboard(formatted);
+      setCopied(true);
+      setMsg("Copied formatted code");
+      setMsgColor("text-success");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setMsg("Failed to copy code");
+      setMsgColor("text-destructive");
+    }
+  };
+
   return (
     <div className="flex-1 flex flex-col min-h-0">
       <div className="flex items-center gap-3 px-6 py-2 border-b border-border/20 shrink-0">
+        <button
+          type="button"
+          onClick={copyCode}
+          disabled={!form.sourceCode.trim()}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors disabled:opacity-40"
+          title="Copy formatted code"
+        >
+          {copied ? <Check size={12} /> : <Copy size={12} />}
+          {copied ? "Copied" : "Copy Code"}
+        </button>
         <button
           type="button"
           onClick={extract}

@@ -2,6 +2,8 @@ import time
 from typing import Any
 
 from executors.base import AgentExecutor, ExecutionResult
+from services.error_format import format_exception_details
+from services.openai_tools import build_openai_tools
 
 
 class OpenAIAgentsExecutor(AgentExecutor):
@@ -14,54 +16,16 @@ class OpenAIAgentsExecutor(AgentExecutor):
     ) -> ExecutionResult:
         from agents import (
             Agent,
-            HostedMCPTool,
             ModelSettings,
             RunConfig,
             Runner,
-            WebSearchTool,
         )
         from agents.items import ReasoningItem, ToolCallItem
         from openai.types.shared.reasoning import Reasoning
 
         start = time.time()
         try:
-            # Build tools
-            tools = []
-            tc_raw = config.get("tools_config")
-            # Normalise to list (legacy single-dict format still supported)
-            tc_list: list[dict] = []
-            if isinstance(tc_raw, list):
-                tc_list = tc_raw
-            elif isinstance(tc_raw, dict):
-                tc_list = [tc_raw]
-
-            for tc in tc_list:
-                if not isinstance(tc, dict):
-                    continue
-                tool_type = tc.get("type")
-                if tool_type == "mcp":
-                    tools.append(
-                        HostedMCPTool(
-                            tool_config={
-                                "type": "mcp",
-                                "server_label": tc.get(
-                                    "server_label", "MCP Server"
-                                ),
-                                "allowed_tools": tc.get("allowed_tools", []),
-                                "require_approval": "never",
-                                "server_url": tc.get("server_url", ""),
-                            }
-                        )
-                    )
-                elif tool_type == "web_search":
-                    ws_kwargs: dict = {}
-                    if tc.get("user_location"):
-                        ws_kwargs["user_location"] = tc["user_location"]
-                    if tc.get("search_context_size"):
-                        ws_kwargs["search_context_size"] = tc[
-                            "search_context_size"
-                        ]
-                    tools.append(WebSearchTool(**ws_kwargs))
+            tools = build_openai_tools(config.get("tools_config"))
 
             # Build model settings
             ms_raw = config.get("model_settings", {}) or {}
@@ -188,7 +152,7 @@ class OpenAIAgentsExecutor(AgentExecutor):
         except Exception as e:
             elapsed = time.time() - start
             return ExecutionResult(
-                error=str(e),
+                error=format_exception_details(e),
                 execution_time_seconds=round(elapsed, 2),
             )
 
