@@ -758,6 +758,7 @@ export default function AgentDetailPage() {
       : "general",
   );
   const [chatTraceId, setChatTraceId] = useState<number | null>(null);
+  const [chatDemoReplayKey, setChatDemoReplayKey] = useState(0);
   const [form, setForm] = useState<FormState | null>(null);
   const [deleteModal, setDeleteModal] = useState(false);
 
@@ -1114,8 +1115,11 @@ export default function AgentDetailPage() {
               ) : active === "traces" ? (
                 <AgentTracesView
                   agentId={agent.id}
-                  onOpenInChat={(traceId) => {
+                  onOpenInChat={(traceId, mode = "normal") => {
                     setChatTraceId(traceId);
+                    if (mode === "demo") {
+                      setChatDemoReplayKey(Date.now());
+                    }
                     setActive("chat");
                   }}
                 />
@@ -1124,6 +1128,7 @@ export default function AgentDetailPage() {
                   agentId={agent.id}
                   agentName={agent.name}
                   focusTraceId={chatTraceId}
+                  demoReplayKey={chatDemoReplayKey}
                 />
               ) : (
                 <SettingsView agent={agent} onRequestEdit={startEditing} />

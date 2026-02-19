@@ -10,7 +10,7 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   agentId: number;
-  onOpenInChat?: (traceId: number) => void;
+  onOpenInChat?: (traceId: number, mode?: "normal" | "demo") => void;
 }
 
 export function AgentTracesView({ agentId, onOpenInChat }: Props) {
@@ -106,7 +106,7 @@ export function AgentTracesView({ agentId, onOpenInChat }: Props) {
             {onOpenInChat && selectedTrace.trace_type === "chat" && (
               <button
                 className="px-3 py-1.5 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:brightness-110"
-                onClick={() => onOpenInChat(selectedTrace.id)}
+                onClick={() => onOpenInChat(selectedTrace.id, "normal")}
               >
                 Open in Chat
               </button>

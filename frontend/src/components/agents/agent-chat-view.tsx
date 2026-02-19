@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { agentsApi } from "@/lib/api/agents";
 import type {
@@ -43,6 +43,7 @@ interface Props {
   agentId: number;
   agentName?: string;
   focusTraceId?: number | null;
+  demoReplayKey?: number;
 }
 
 type MessageSegment =
@@ -213,6 +214,35 @@ function traceToConversation(trace: TraceLogOut): ChatMessageItem[] {
   return out;
 }
 
+function reasoningToText(reasoning?: ReasoningStep[]): string {
+  if (!Array.isArray(reasoning) || reasoning.length === 0) return "";
+  const parts: string[] = [];
+  for (const step of reasoning) {
+    if (!step) continue;
+    if (typeof step.summary === "string") {
+      parts.push(step.summary);
+    } else if (Array.isArray(step.summary)) {
+      for (const item of step.summary) {
+        if (typeof item === "string" && item.trim()) parts.push(item);
+      }
+    }
+    if (Array.isArray(step.content)) {
+      for (const item of step.content) {
+        if (typeof item === "string" && item.trim()) {
+          parts.push(item);
+          continue;
+        }
+        if (item && typeof item === "object") {
+          const rec = item as Record<string, unknown>;
+          const text = rec.text;
+          if (typeof text === "string" && text.trim()) parts.push(text);
+        }
+      }
+    }
+  }
+  return parts.join("\n\n").trim();
+}
+
 function isWideMessageContent(content: string): boolean {
   if (content.includes("```")) return true;
   const hasTableHeader = /\|[^\n]+\|\n\|[\s:-|]+\|/m.test(content);
@@ -252,13 +282,20 @@ function MessageContent({
   );
 }
 
-export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props) {
+export function AgentChatView({
+  agentId,
+  agentName,
+  focusTraceId = null,
+  demoReplayKey = 0,
+}: Props) {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [input, setInput] = useState("");
   const [historyHiddenByAgent, setHistoryHiddenByAgent] = useState<Record<number, boolean>>({});
   const [toolModal, setToolModal] = useState<{ toolCalls: ToolCall[]; idx: number } | null>(null);
   const [detailsModal, setDetailsModal] = useState<ChatMessageItem | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isDemoRunning, setIsDemoRunning] = useState(false);
+  const [chatZoom, setChatZoom] = useState(1);
   const [isExpanded, setIsExpanded] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
   const thinkingBodyRef = useRef<HTMLDivElement | null>(null);
@@ -266,6 +303,9 @@ export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props
   const shouldAutoScrollThinkingRef = useRef(true);
   const suppressMainScrollHandlerRef = useRef(false);
   const suppressThinkingScrollHandlerRef = useRef(false);
+  const demoRunIdRef = useRef(0);
+  const lastDemoReplayKeyRef = useRef(0);
+  const agentIdRef = useRef(agentId);
   const isHistoryHidden = !!historyHiddenByAgent[agentId];
 
   const {
@@ -297,13 +337,259 @@ export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props
 
   const renderedMessages = messages.length > 0 ? messages : isHistoryHidden ? [] : historyMessages;
 
+  const stopDemo = useCallback(() => {
+    demoRunIdRef.current += 1;
+    setIsDemoRunning(false);
+    setInput("");
+  }, []);
+
+  const replayDemoFromHistory = useCallback(async () => {
+    if (isStreaming || isDemoRunning) return;
+    const source = historyMessages.filter((m) => !m.pending && !!m.content?.trim());
+    if (!source.length) return;
+
+    const runId = demoRunIdRef.current + 1;
+    demoRunIdRef.current = runId;
+    const isCancelled = () => demoRunIdRef.current !== runId;
+    const wait = (ms: number) =>
+      new Promise<void>((resolve) => {
+        window.setTimeout(resolve, ms);
+      });
+    const randomInt = (min: number, max: number) =>
+      min + Math.floor(Math.random() * (max - min + 1));
+    const demoTiming = {
+      userTyping: { chunkMin: 1, chunkMax: 2, delayMin: 24, delayMax: 58 },
+      thinking: { chunkMin: 2, chunkMax: 6, delayMin: 4, delayMax: 12 },
+      assistant: { chunkMin: 2, chunkMax: 7, delayMin: 5, delayMax: 14 },
+    };
+
+    const streamText = async (
+      text: string,
+      applyChunk: (chunk: string) => void,
+      chunkMin: number,
+      chunkMax: number,
+      delayMin: number,
+      delayMax: number,
+    ) => {
+      let idx = 0;
+      while (idx < text.length) {
+        if (isCancelled()) return;
+        const chunkSize = Math.min(text.length - idx, randomInt(chunkMin, chunkMax));
+        const chunk = text.slice(idx, idx + chunkSize);
+        applyChunk(chunk);
+        idx += chunkSize;
+        await wait(randomInt(delayMin, delayMax));
+      }
+    };
+
+    setIsDemoRunning(true);
+    setHistoryHiddenByAgent((prev) => ({ ...prev, [agentId]: true }));
+    setMessages([]);
+    setInput("");
+    shouldAutoScrollRef.current = true;
+    shouldAutoScrollThinkingRef.current = true;
+
+    try {
+      for (let i = 0; i < source.length; i += 1) {
+        if (isCancelled()) break;
+        const turn = source[i];
+
+        if (turn.role === "user") {
+          let typed = "";
+          await streamText(
+            turn.content,
+            (chunk) => {
+              typed += chunk;
+              setInput(typed);
+            },
+            demoTiming.userTyping.chunkMin,
+            demoTiming.userTyping.chunkMax,
+            demoTiming.userTyping.delayMin,
+            demoTiming.userTyping.delayMax,
+          );
+          if (isCancelled()) break;
+          await wait(140);
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `demo-${runId}-${i}-user`,
+              role: "user",
+              content: turn.content,
+            },
+          ]);
+          setInput("");
+          await wait(210);
+          continue;
+        }
+
+        const pendingId = `demo-${runId}-${i}-assistant-pending`;
+        const reasoningText = reasoningToText(turn.meta?.reasoning);
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: pendingId,
+            role: "assistant",
+            content: "",
+            pending: true,
+            pending_status: null,
+            pending_events: [],
+            pending_reasoning: "",
+            meta: {
+              ...turn.meta,
+              reasoning: turn.meta?.reasoning ? [{ summary: [""] }] : undefined,
+            },
+          },
+        ]);
+
+        if (reasoningText) {
+          await streamText(
+            reasoningText,
+            (chunk) => {
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === pendingId
+                    ? {
+                        ...m,
+                        pending_status: "thinking",
+                        pending_events: ["thinking"],
+                        pending_reasoning: `${m.pending_reasoning || ""}${chunk}`,
+                        meta: {
+                          ...m.meta,
+                          reasoning: [{ summary: [`${m.pending_reasoning || ""}${chunk}`] }],
+                        },
+                      }
+                    : m
+                )
+              );
+            },
+            demoTiming.thinking.chunkMin,
+            demoTiming.thinking.chunkMax,
+            demoTiming.thinking.delayMin,
+            demoTiming.thinking.delayMax,
+          );
+          if (isCancelled()) break;
+          await wait(180);
+        }
+
+        await streamText(
+          turn.content,
+          (chunk) => {
+            setMessages((prev) =>
+              prev.map((m) =>
+                m.id === pendingId
+                  ? {
+                      ...m,
+                      content: `${m.content || ""}${chunk}`,
+                    }
+                  : m
+              )
+            );
+          },
+          demoTiming.assistant.chunkMin,
+          demoTiming.assistant.chunkMax,
+          demoTiming.assistant.delayMin,
+          demoTiming.assistant.delayMax,
+        );
+        if (isCancelled()) break;
+
+        setMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingId
+              ? {
+                  ...m,
+                  pending: false,
+                  pending_status: null,
+                  pending_events: [],
+                  pending_reasoning: "",
+                  content: turn.content,
+                  error: turn.error || null,
+                  meta: turn.meta,
+                }
+              : m
+          )
+        );
+        await wait(260);
+      }
+    } finally {
+      if (demoRunIdRef.current === runId) {
+        setIsDemoRunning(false);
+        setInput("");
+      }
+    }
+  }, [agentId, historyMessages, isDemoRunning, isStreaming]);
+
+  useEffect(() => {
+    return () => {
+      demoRunIdRef.current += 1;
+    };
+  }, []);
+
+  useEffect(() => {
+    agentIdRef.current = agentId;
+  }, [agentId]);
+
   useEffect(() => {
     if (focusTraceId == null) return;
+    stopDemo();
     setHistoryHiddenByAgent((prev) => ({ ...prev, [agentId]: false }));
     setMessages([]);
     shouldAutoScrollRef.current = true;
     shouldAutoScrollThinkingRef.current = true;
-  }, [focusTraceId, agentId]);
+  }, [focusTraceId, agentId, stopDemo]);
+
+  useEffect(() => {
+    if (demoReplayKey <= 0) return;
+    if (!activeHistoryTrace) return;
+    if (isStreaming || isDemoRunning) return;
+    const consumedKeyName = `agent-chat-demo-consumed-${agentIdRef.current}`;
+    let consumedKey = lastDemoReplayKeyRef.current;
+    if (typeof window !== "undefined") {
+      const stored = Number(sessionStorage.getItem(consumedKeyName) || "0");
+      if (!Number.isNaN(stored)) consumedKey = Math.max(consumedKey, stored);
+    }
+    if (demoReplayKey <= consumedKey) return;
+    lastDemoReplayKeyRef.current = demoReplayKey;
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(consumedKeyName, String(demoReplayKey));
+    }
+    void replayDemoFromHistory();
+  }, [demoReplayKey, activeHistoryTrace, isStreaming, isDemoRunning, replayDemoFromHistory]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey)) return;
+      if (event.key !== "5") return;
+      event.preventDefault();
+      if (isDemoRunning) {
+        stopDemo();
+        return;
+      }
+      if (!activeHistoryTrace || isStreaming) return;
+      void replayDemoFromHistory();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activeHistoryTrace, isDemoRunning, isStreaming, replayDemoFromHistory, stopDemo]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      const isPlusKey = event.key === "+" || event.key === "=";
+      const isMinusKey = event.key === "-" || event.key === "_" || event.key === "Subtract";
+      if (!isPlusKey && !isMinusKey) return;
+      event.preventDefault();
+      if (isPlusKey) {
+        setChatZoom((prev) => Math.min(2, Number((prev + 0.1).toFixed(2))));
+      } else {
+        setChatZoom((prev) => Math.max(0.8, Number((prev - 0.1).toFixed(2))));
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const chatZoomStyle = chatZoom === 1 ? undefined : { zoom: chatZoom };
 
   const isNearBottom = (el: HTMLDivElement, threshold = 96) => {
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
@@ -376,7 +662,7 @@ export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props
 
   const sendMessage = async () => {
     const text = input.trim();
-    if (!text || isStreaming) return;
+    if (!text || isStreaming || isDemoRunning) return;
     const baseMessages = renderedMessages;
     setHistoryHiddenByAgent((prev) => ({ ...prev, [agentId]: true }));
     shouldAutoScrollRef.current = true;
@@ -634,6 +920,7 @@ export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props
           <button
             className="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--surface)] border border-border text-muted hover:text-foreground"
             onClick={() => {
+              stopDemo();
               setHistoryHiddenByAgent((prev) => ({ ...prev, [agentId]: true }));
               shouldAutoScrollRef.current = true;
               shouldAutoScrollThinkingRef.current = true;
@@ -662,6 +949,7 @@ export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props
               ? "mx-auto w-full max-w-[980px] px-10 py-8 space-y-4"
               : "mx-auto w-full px-8 py-6 lg:px-10 lg:py-7 space-y-4"
           }
+          style={chatZoomStyle}
         >
           {renderedMessages.length === 0 && (
             <div className="space-y-2">
@@ -831,14 +1119,19 @@ export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props
       )}
 
       <div className={isExpanded ? "px-8 py-4 border-t border-border" : "px-6 py-4 border-t border-border"}>
-        <div className={isExpanded ? "relative flex items-center mx-auto max-w-[980px]" : "relative flex items-center"}>
+        <div
+          className={isExpanded ? "relative flex items-center mx-auto max-w-[980px]" : "relative flex items-center"}
+          style={chatZoomStyle}
+        >
           <input
             type="text"
             className="w-full h-10 rounded-full border border-border bg-[var(--surface)] pl-4 pr-12 text-sm text-foreground outline-none"
-            placeholder="Type a message..."
+            placeholder={isDemoRunning ? "Demo mode replaying..." : "Type a message..."}
             value={input}
+            readOnly={isDemoRunning}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
+              if (isDemoRunning) return;
               if (e.key === "Enter" && !e.shiftKey) {
                 e.preventDefault();
                 sendMessage();
@@ -848,8 +1141,8 @@ export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props
           <button
             className="absolute right-1.5 w-7 h-7 rounded-full bg-foreground text-background inline-flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110"
             onClick={sendMessage}
-            disabled={isStreaming || !input.trim()}
-            title={isStreaming ? "Streaming..." : "Send"}
+            disabled={isStreaming || isDemoRunning || !input.trim()}
+            title={isDemoRunning ? "Demo mode running" : isStreaming ? "Streaming..." : "Send"}
           >
             <ArrowUp size={14} />
           </button>
