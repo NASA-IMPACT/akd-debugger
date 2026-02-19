@@ -1,8 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { agentsApi } from "@/lib/api/agents";
-import type { AgentChatResponse, ChatMessage, ReasoningStep, ToolCall, UsageData } from "@/lib/types";
+import type {
+  AgentChatResponse,
+  ChatMessage,
+  ReasoningStep,
+  ToolCall,
+  TraceLogOut,
+  UsageData,
+} from "@/lib/types";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 import { JsonTree } from "@/components/json/json-tree";
 import { ToolPills } from "@/components/tool-calls/tool-pills";
@@ -34,6 +42,7 @@ interface ChatMessageItem extends ChatMessage {
 interface Props {
   agentId: number;
   agentName?: string;
+  focusTraceId?: number | null;
 }
 
 type MessageSegment =
@@ -88,6 +97,122 @@ function splitMessageSegments(content: string): MessageSegment[] {
   return chunks.filter((chunk) => chunk.type === "json" || chunk.content.trim().length > 0);
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
+function asReasoningSteps(value: unknown): ReasoningStep[] | undefined {
+  return Array.isArray(value) ? (value as ReasoningStep[]) : undefined;
+}
+
+function asToolCalls(value: unknown): ToolCall[] | undefined {
+  return Array.isArray(value) ? (value as ToolCall[]) : undefined;
+}
+
+function extractMessageText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        const p = asRecord(part);
+        if (!p) return "";
+        if (p.type === "text" && typeof p.text === "string") return p.text;
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
+  return "";
+}
+
+function traceRequestMessages(requestPayload: unknown, traceId: number): ChatMessageItem[] {
+  const payload = asRecord(requestPayload);
+  const messages = payload?.messages;
+  if (!Array.isArray(messages)) return [];
+
+  const out: ChatMessageItem[] = [];
+  for (let i = 0; i < messages.length; i += 1) {
+    const msg = asRecord(messages[i]);
+    if (!msg) continue;
+    const role = msg.role;
+    if (role !== "user" && role !== "assistant") continue;
+    const content = extractMessageText(msg.content);
+    if (!content.trim()) continue;
+    out.push({
+      id: `trace-${traceId}-req-${i}-${role}`,
+      role,
+      content,
+    });
+  }
+  return out;
+}
+
+function extractAssistantResponse(responsePayload: Record<string, unknown> | null): string {
+  if (!responsePayload) return "";
+  // Direct response field (custom API format)
+  if (typeof responsePayload.response === "string") return responsePayload.response;
+  // OpenAI chat completions format: choices[0].message.content
+  const choices = responsePayload.choices;
+  if (Array.isArray(choices) && choices.length > 0) {
+    const first = asRecord(choices[0]);
+    const msg = first && asRecord(first.message);
+    if (msg && typeof msg.content === "string") return msg.content;
+  }
+  // OpenAI Responses API format: output[].content[].text
+  const output = responsePayload.output;
+  if (Array.isArray(output)) {
+    const texts: string[] = [];
+    for (const item of output) {
+      const rec = asRecord(item);
+      if (!rec) continue;
+      if (typeof rec.text === "string") {
+        texts.push(rec.text);
+      } else if (Array.isArray(rec.content)) {
+        for (const part of rec.content) {
+          const p = asRecord(part);
+          if (p && typeof p.text === "string") texts.push(p.text);
+        }
+      }
+    }
+    if (texts.length > 0) return texts.join("\n");
+  }
+  // assistant_message field
+  if (typeof responsePayload.assistant_message === "string") return responsePayload.assistant_message;
+  return "";
+}
+
+function traceToConversation(trace: TraceLogOut): ChatMessageItem[] {
+  const responsePayload = asRecord(trace.response_payload);
+  const requestMessages = traceRequestMessages(trace.request_payload, trace.id);
+  const assistantResponse = extractAssistantResponse(responsePayload);
+  const assistantError = trace.error ? `ERROR: ${trace.error}` : "";
+  const assistantContent = assistantResponse || assistantError;
+  const toolCalls = asToolCalls(responsePayload?.tool_calls);
+  const reasoning = asReasoningSteps(responsePayload?.reasoning);
+  const usage = asRecord(trace.usage);
+
+  const out: ChatMessageItem[] = [...requestMessages];
+  if (assistantContent) {
+    out.push({
+      id: `trace-${trace.id}-assistant`,
+      role: "assistant",
+      content: assistantContent,
+      error: trace.error || null,
+      meta: {
+        tool_calls: toolCalls,
+        reasoning,
+        usage: usage as UsageData | undefined,
+        estimated_cost_usd: trace.estimated_cost_usd,
+        cost_breakdown: trace.cost_breakdown || undefined,
+        missing_model_pricing: trace.missing_model_pricing,
+        trace_log_id: trace.id,
+      },
+    });
+  }
+  return out;
+}
+
 function isWideMessageContent(content: string): boolean {
   if (content.includes("```")) return true;
   const hasTableHeader = /\|[^\n]+\|\n\|[\s:-|]+\|/m.test(content);
@@ -95,7 +220,15 @@ function isWideMessageContent(content: string): boolean {
   return content.length > 1200;
 }
 
-function MessageContent({ content, inverted = false }: { content: string; inverted?: boolean }) {
+function MessageContent({
+  content,
+  inverted = false,
+  className,
+}: {
+  content: string;
+  inverted?: boolean;
+  className?: string;
+}) {
   const segments = useMemo(() => splitMessageSegments(content), [content]);
   const markdownCls = inverted
     ? "prose prose-sm max-w-none text-white [&_*]:text-white [&_strong]:text-white [&_em]:text-white/95 [&_a]:text-white [&_code]:font-mono [&_code]:text-white [&_code]:bg-white/15 [&_pre]:font-mono [&_pre]:bg-white/10 [&_p]:my-1"
@@ -105,7 +238,7 @@ function MessageContent({ content, inverted = false }: { content: string; invert
     : "jt-root font-mono text-sm leading-relaxed";
 
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${className || ""}`.trim()}>
       {segments.map((segment, idx) =>
         segment.type === "json" ? (
           <div key={`json-${idx}`} className={jsonCls}>
@@ -119,36 +252,110 @@ function MessageContent({ content, inverted = false }: { content: string; invert
   );
 }
 
-export function AgentChatView({ agentId, agentName }: Props) {
+export function AgentChatView({ agentId, agentName, focusTraceId = null }: Props) {
   const [messages, setMessages] = useState<ChatMessageItem[]>([]);
   const [input, setInput] = useState("");
+  const [historyHiddenByAgent, setHistoryHiddenByAgent] = useState<Record<number, boolean>>({});
   const [toolModal, setToolModal] = useState<{ toolCalls: ToolCall[]; idx: number } | null>(null);
   const [detailsModal, setDetailsModal] = useState<ChatMessageItem | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
   const messagesRef = useRef<HTMLDivElement | null>(null);
+  const thinkingBodyRef = useRef<HTMLDivElement | null>(null);
+  const shouldAutoScrollRef = useRef(true);
+  const shouldAutoScrollThinkingRef = useRef(true);
+  const suppressMainScrollHandlerRef = useRef(false);
+  const suppressThinkingScrollHandlerRef = useRef(false);
+  const isHistoryHidden = !!historyHiddenByAgent[agentId];
+
+  const {
+    data: chatTraces = [],
+    isLoading: isHistoryLoading,
+    error: historyLoadError,
+  } = useQuery({
+    queryKey: ["agent-chat-history", agentId],
+    queryFn: () =>
+      agentsApi.listTraces(agentId, {
+        traceType: "chat",
+        limit: 1000,
+      }),
+  });
+
+  const activeHistoryTrace = useMemo(() => {
+    if (!chatTraces.length) return null;
+    if (focusTraceId != null) {
+      const exact = chatTraces.find((t) => t.id === focusTraceId);
+      if (exact) return exact;
+    }
+    return chatTraces[0] || null;
+  }, [chatTraces, focusTraceId]);
+
+  const historyMessages = useMemo(() => {
+    if (!activeHistoryTrace) return [];
+    return traceToConversation(activeHistoryTrace);
+  }, [activeHistoryTrace]);
+
+  const renderedMessages = messages.length > 0 ? messages : isHistoryHidden ? [] : historyMessages;
+
+  useEffect(() => {
+    if (focusTraceId == null) return;
+    setHistoryHiddenByAgent((prev) => ({ ...prev, [agentId]: false }));
+    setMessages([]);
+    shouldAutoScrollRef.current = true;
+    shouldAutoScrollThinkingRef.current = true;
+  }, [focusTraceId, agentId]);
+
+  const isNearBottom = (el: HTMLDivElement, threshold = 96) => {
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    return distanceFromBottom <= threshold;
+  };
+
+  const scrollToBottom = (behavior: ScrollBehavior = "auto") => {
+    const el = messagesRef.current;
+    if (!el) return;
+    suppressMainScrollHandlerRef.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+    window.setTimeout(() => {
+      suppressMainScrollHandlerRef.current = false;
+    }, behavior === "smooth" ? 220 : 40);
+  };
 
   useEffect(() => {
     if (typeof window === "undefined") return;
     sessionStorage.removeItem(`agent-chat-${agentId}`);
   }, [agentId]);
 
-  const lastMessage = messages[messages.length - 1];
+  const lastMessage = renderedMessages[renderedMessages.length - 1];
   const streamingContent = lastMessage?.pending
     ? (lastMessage.content || "") + (lastMessage.pending_reasoning || "")
     : null;
+  const streamingReasoning = lastMessage?.pending ? (lastMessage.pending_reasoning || "") : "";
 
   useEffect(() => {
-    const el = messagesRef.current;
+    if (!shouldAutoScrollRef.current) return;
+    scrollToBottom(streamingContent ? "auto" : "smooth");
+  }, [renderedMessages.length, streamingContent]);
+
+  useEffect(() => {
+    const isThinkingStream = !!lastMessage?.pending && !lastMessage?.content && !!streamingReasoning.trim();
+    if (!isThinkingStream) {
+      shouldAutoScrollThinkingRef.current = true;
+      return;
+    }
+    if (!shouldAutoScrollThinkingRef.current) return;
+    const el = thinkingBodyRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [messages.length, streamingContent]);
+    suppressThinkingScrollHandlerRef.current = true;
+    el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+    window.setTimeout(() => {
+      suppressThinkingScrollHandlerRef.current = false;
+    }, 40);
+  }, [lastMessage?.id, lastMessage?.pending, lastMessage?.content, streamingReasoning]);
 
   useEffect(() => {
     const id = window.setTimeout(() => {
-      const el = messagesRef.current;
-      if (!el) return;
-      el.scrollTo({ top: el.scrollHeight, behavior: "auto" });
+      shouldAutoScrollRef.current = true;
+      scrollToBottom("auto");
     }, 0);
     return () => window.clearTimeout(id);
   }, []);
@@ -170,9 +377,13 @@ export function AgentChatView({ agentId, agentName }: Props) {
   const sendMessage = async () => {
     const text = input.trim();
     if (!text || isStreaming) return;
+    const baseMessages = renderedMessages;
+    setHistoryHiddenByAgent((prev) => ({ ...prev, [agentId]: true }));
+    shouldAutoScrollRef.current = true;
+    shouldAutoScrollThinkingRef.current = true;
     const pendingId = `assistant-pending-${Date.now()}`;
     const next = [
-      ...messages,
+      ...baseMessages,
       { id: `user-${Date.now()}`, role: "user" as const, content: text },
       {
         id: pendingId,
@@ -377,6 +588,20 @@ export function AgentChatView({ agentId, agentName }: Props) {
     }
   };
 
+  const handleMessagesScroll = () => {
+    const el = messagesRef.current;
+    if (!el) return;
+    if (suppressMainScrollHandlerRef.current) return;
+    shouldAutoScrollRef.current = isNearBottom(el, 80);
+  };
+
+  const handleThinkingScroll = () => {
+    const el = thinkingBodyRef.current;
+    if (!el) return;
+    if (suppressThinkingScrollHandlerRef.current) return;
+    shouldAutoScrollThinkingRef.current = isNearBottom(el, 16);
+  };
+
   return (
     <>
     {isExpanded && (
@@ -409,6 +634,9 @@ export function AgentChatView({ agentId, agentName }: Props) {
           <button
             className="px-2.5 py-1 rounded-md text-xs font-medium bg-[var(--surface)] border border-border text-muted hover:text-foreground"
             onClick={() => {
+              setHistoryHiddenByAgent((prev) => ({ ...prev, [agentId]: true }));
+              shouldAutoScrollRef.current = true;
+              shouldAutoScrollThinkingRef.current = true;
               setMessages([]);
               setInput("");
               setToolModal(null);
@@ -420,7 +648,14 @@ export function AgentChatView({ agentId, agentName }: Props) {
         </div>
       </div>
 
-      <div ref={messagesRef} className="flex-1 overflow-y-auto">
+      <div
+        ref={messagesRef}
+        className="flex-1 overflow-y-auto"
+        onScroll={handleMessagesScroll}
+        onWheel={(event) => {
+          if (event.deltaY < 0) shouldAutoScrollRef.current = false;
+        }}
+      >
         <div
           className={
             isExpanded
@@ -428,74 +663,110 @@ export function AgentChatView({ agentId, agentName }: Props) {
               : "mx-auto w-full px-8 py-6 lg:px-10 lg:py-7 space-y-4"
           }
         >
-          {messages.length === 0 && (
-            <div className="text-sm text-muted">No messages yet.</div>
+          {renderedMessages.length === 0 && (
+            <div className="space-y-2">
+              <div className="text-sm text-muted">
+                {isHistoryLoading
+                  ? "Loading chat history..."
+                  : historyLoadError
+                    ? "Couldn't load chat history. You can still start a new chat."
+                    : "No messages yet."}
+              </div>
+            </div>
           )}
-          {messages.map((m) => (
-            <div key={m.id} className="space-y-2">
-              <div
-                className={
-                  m.role === "user"
-                    ? "ml-auto w-fit max-w-[72%] rounded-2xl px-3.5 py-1.5 text-sm bg-primary text-primary-foreground"
-                    : `${m.content && isWideMessageContent(m.content) ? "max-w-[92%]" : "max-w-[74%]"} chat-assistant-bubble rounded-2xl ${
-                        m.pending && !m.content && !m.pending_reasoning ? "px-3 py-1.5" : "px-4 py-2.5"
-                      } text-sm text-foreground ${
-                        m.pending ? "w-fit" : ""
-                      }`
-                }
-              >
-                {m.pending ? (
-                  <div className="space-y-0.5">
-                    {m.content ? (
-                      <MessageContent content={m.content} inverted={m.role === "user"} />
-                    ) : m.pending_reasoning?.trim() ? (
-                      <div className="space-y-1.5">
-                        <div className="text-[11px] text-muted-light">Thinking summary</div>
-                        <MessageContent content={m.pending_reasoning} inverted={m.role === "user"} />
-                      </div>
-                    ) : (
-                      (() => {
-                        const recent = (m.pending_events || []).slice(-3);
-                        const activeAction =
-                          m.pending_status || recent[recent.length - 1] || "";
-                        const showActiveStatus =
-                          !!activeAction &&
-                          activeAction.trim().toLowerCase() !== "thinking";
-                        const history = recent
-                          .filter((evt, idx) => !(evt === activeAction && idx === recent.length - 1))
-                          .slice(-2);
-                        return (
-                          <>
-                            {!!history.length && (
-                              <div className="text-[11px] text-muted-light space-y-0.5">
-                                {history.map((evt, i) => (
-                                  <div key={`${m.id}-evt-${i}`}>• {evt}</div>
-                                ))}
-                              </div>
-                            )}
-                            {showActiveStatus && (
-                              <div className="text-[11px] text-muted-light">{activeAction}</div>
-                            )}
-                            <div className="chat-thinking-gradient text-[14px] font-semibold">Thinking</div>
-                          </>
-                        );
-                      })()
-                    )}
-                  </div>
-                ) : (
-                  <MessageContent content={m.content} inverted={m.role === "user"} />
+          {renderedMessages.map((m) => {
+            const hasPendingReasoning = !!m.pending && !m.content && !!m.pending_reasoning?.trim();
+            const isCompactPending = !!m.pending && !m.content && !m.pending_reasoning?.trim();
+
+            return (
+              <div key={m.id} className="space-y-2">
+                <div
+                  className={
+                    m.role === "user"
+                      ? "ml-auto w-fit max-w-[72%] rounded-2xl px-3.5 py-1.5 text-sm bg-primary text-primary-foreground"
+                      : `${m.content && isWideMessageContent(m.content) ? "max-w-[92%]" : hasPendingReasoning ? "max-w-[82%] w-full" : "max-w-[74%]"} chat-assistant-bubble rounded-2xl ${
+                          isCompactPending ? "px-3 py-1.5" : hasPendingReasoning ? "p-2.5" : "px-4 py-2.5"
+                        } text-sm text-foreground ${
+                          m.pending && !hasPendingReasoning ? "w-fit" : ""
+                        }`
+                  }
+                >
+                  {m.pending ? (
+                    <div className="space-y-0.5">
+                      {m.content ? (
+                        <MessageContent content={m.content} inverted={m.role === "user"} />
+                      ) : hasPendingReasoning ? (
+                        <div className="chat-thinking-panel">
+                          <div className="chat-thinking-panel-header">
+                            <div className="chat-thinking-summary-label text-[11px] font-semibold">
+                              <span className="chat-thinking-summary-dot" aria-hidden="true" />
+                              <span className="chat-thinking-summary-title">Thinking</span>
+                              <span className="chat-thinking-summary-ellipsis" aria-hidden="true">
+                                <span>.</span>
+                                <span>.</span>
+                                <span>.</span>
+                              </span>
+                            </div>
+                          </div>
+                          <div
+                            ref={thinkingBodyRef}
+                            className="chat-thinking-panel-body"
+                            onScroll={handleThinkingScroll}
+                            onWheel={(event) => {
+                              if (event.deltaY < 0) shouldAutoScrollThinkingRef.current = false;
+                            }}
+                          >
+                            <MessageContent
+                              content={m.pending_reasoning || ""}
+                              inverted={m.role === "user"}
+                              className="chat-thinking-summary"
+                            />
+                          </div>
+                        </div>
+                      ) : (
+                        (() => {
+                          const recent = (m.pending_events || []).slice(-3);
+                          const activeAction =
+                            m.pending_status || recent[recent.length - 1] || "";
+                          const showActiveStatus =
+                            !!activeAction &&
+                            activeAction.trim().toLowerCase() !== "thinking";
+                          const history = recent
+                            .filter((evt, idx) => !(evt === activeAction && idx === recent.length - 1))
+                            .slice(-2);
+                          return (
+                            <>
+                              {!!history.length && (
+                                <div className="text-[11px] text-muted-light space-y-0.5">
+                                  {history.map((evt, i) => (
+                                    <div key={`${m.id}-evt-${i}`}>• {evt}</div>
+                                  ))}
+                                </div>
+                              )}
+                              {showActiveStatus && (
+                                <div className="text-[11px] text-muted-light">{activeAction}</div>
+                              )}
+                              <div className="chat-thinking-gradient text-[14px] font-semibold">Thinking</div>
+                            </>
+                          );
+                        })()
+                      )}
+                    </div>
+                  ) : (
+                    <MessageContent content={m.content} inverted={m.role === "user"} />
+                  )}
+                </div>
+                {m.role === "assistant" && !m.pending && m.meta && (
+                  <button
+                    className="text-xs text-muted hover:text-foreground font-semibold"
+                    onClick={() => setDetailsModal(m)}
+                  >
+                    Show thinking
+                  </button>
                 )}
               </div>
-              {m.role === "assistant" && !m.pending && m.meta && (
-              <button
-                className="text-xs text-muted hover:text-foreground font-semibold"
-                onClick={() => setDetailsModal(m)}
-              >
-                Show thinking
-              </button>
-            )}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 

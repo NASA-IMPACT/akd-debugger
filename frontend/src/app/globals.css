@@ -598,8 +598,162 @@ a {
   animation: thinking-gradient-flow 1.55s linear infinite;
 }
 
+@keyframes thinking-summary-label-pulse {
+  0%,
+  100% {
+    opacity: 0.72;
+    transform: translateY(0);
+  }
+
+  50% {
+    opacity: 1;
+    transform: translateY(-0.5px);
+  }
+}
+
+@keyframes thinking-summary-title-flow {
+  0% {
+    background-position: -160% 50%;
+  }
+
+  100% {
+    background-position: 160% 50%;
+  }
+}
+
+@keyframes thinking-summary-dot-pulse {
+  0%,
+  100% {
+    transform: scale(0.9);
+    opacity: 0.65;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 1;
+  }
+}
+
+.chat-thinking-summary-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--foreground) 54%, var(--muted-light) 46%);
+  animation: thinking-summary-label-pulse 1.2s ease-in-out infinite;
+}
+
+.chat-thinking-summary-dot {
+  width: 0.42rem;
+  height: 0.42rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--brand) 60%, var(--foreground) 40%);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--brand) 20%, transparent);
+  animation: thinking-summary-dot-pulse 1.2s ease-in-out infinite;
+}
+
+.chat-thinking-summary-title {
+  display: inline-block;
+  background-image: linear-gradient(
+    105deg,
+    color-mix(in srgb, var(--foreground) 45%, var(--muted-light) 55%) 12%,
+    color-mix(in srgb, var(--brand) 40%, var(--foreground) 60%) 50%,
+    color-mix(in srgb, var(--foreground) 45%, var(--muted-light) 55%) 88%
+  );
+  background-size: 240% 100%;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: thinking-summary-title-flow 1.45s linear infinite;
+}
+
+.chat-thinking-summary-ellipsis {
+  display: inline-flex;
+  gap: 0.08rem;
+  color: color-mix(in srgb, var(--foreground) 58%, var(--muted-light) 42%);
+}
+
+.chat-thinking-summary-ellipsis span {
+  animation: thinking-summary-label-pulse 1s ease-in-out infinite;
+}
+
+.chat-thinking-summary-ellipsis span:nth-child(2) {
+  animation-delay: 0.14s;
+}
+
+.chat-thinking-summary-ellipsis span:nth-child(3) {
+  animation-delay: 0.28s;
+}
+
+.chat-thinking-panel {
+  display: flex;
+  flex-direction: column;
+  height: clamp(12rem, 32vh, 20rem);
+  min-height: 12rem;
+  max-height: 20rem;
+  border: 1px solid var(--border);
+  border-radius: 0.85rem;
+  background: color-mix(in srgb, var(--card) 92%, var(--surface) 8%);
+  overflow: hidden;
+}
+
+.chat-thinking-panel-header {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  min-height: 2rem;
+  padding: 0.4rem 0.75rem;
+  border-bottom: 1px solid var(--border);
+  background: color-mix(in srgb, var(--card) 97%, transparent);
+}
+
+.chat-thinking-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0.6rem 0.75rem 0.8rem;
+}
+
+.chat-thinking-summary {
+  color: color-mix(in srgb, var(--foreground) 45%, var(--muted-light) 55%);
+}
+
+.chat-thinking-summary .prose,
+.chat-thinking-summary .jt-root,
+.chat-thinking-summary :is(p, li, span, strong, em, a, td, th, blockquote, h1, h2, h3, h4, h5, h6) {
+  color: inherit;
+}
+
+.chat-thinking-summary .prose {
+  --tw-prose-body: color-mix(in srgb, var(--foreground) 45%, var(--muted-light) 55%);
+  --tw-prose-headings: color-mix(in srgb, var(--foreground) 52%, var(--muted-light) 48%);
+  --tw-prose-bold: color-mix(in srgb, var(--foreground) 52%, var(--muted-light) 48%);
+  --tw-prose-links: color-mix(in srgb, var(--foreground) 52%, var(--muted-light) 48%);
+  --tw-prose-quotes: color-mix(in srgb, var(--foreground) 48%, var(--muted-light) 52%);
+}
+
+.chat-thinking-summary .prose :is(h1, h2, h3, h4, h5, h6, strong, b) {
+  color: color-mix(in srgb, var(--foreground) 52%, var(--muted-light) 48%) !important;
+}
+
+.chat-thinking-summary code,
+.chat-thinking-summary pre {
+  color: color-mix(in srgb, var(--foreground) 50%, var(--muted-light) 50%);
+  background: color-mix(in srgb, var(--surface-hover) 88%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chat-thinking-gradient {
+    animation: none;
+  }
+
+  .chat-thinking-summary-label,
+  .chat-thinking-summary-dot,
+  .chat-thinking-summary-title,
+  .chat-thinking-summary-ellipsis span {
     animation: none;
   }
 }

@@ -757,6 +757,7 @@ export default function AgentDetailPage() {
       ? initialTab
       : "general",
   );
+  const [chatTraceId, setChatTraceId] = useState<number | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [deleteModal, setDeleteModal] = useState(false);
 
@@ -1111,9 +1112,19 @@ export default function AgentDetailPage() {
               ) : active === "paste" ? (
                 <PasteCodeView agent={agent} onRequestEdit={startEditing} />
               ) : active === "traces" ? (
-                <AgentTracesView agentId={agent.id} />
+                <AgentTracesView
+                  agentId={agent.id}
+                  onOpenInChat={(traceId) => {
+                    setChatTraceId(traceId);
+                    setActive("chat");
+                  }}
+                />
               ) : active === "chat" ? (
-                <AgentChatView agentId={agent.id} agentName={agent.name} />
+                <AgentChatView
+                  agentId={agent.id}
+                  agentName={agent.name}
+                  focusTraceId={chatTraceId}
+                />
               ) : (
                 <SettingsView agent={agent} onRequestEdit={startEditing} />
               )}

@@ -10,9 +10,10 @@ import { cn } from "@/lib/utils";
 
 interface Props {
   agentId: number;
+  onOpenInChat?: (traceId: number) => void;
 }
 
-export function AgentTracesView({ agentId }: Props) {
+export function AgentTracesView({ agentId, onOpenInChat }: Props) {
   const [status, setStatus] = useState<string>("all");
   const [traceType, setTraceType] = useState<string>("all");
   const [selectedTraceId, setSelectedTraceId] = useState<number | null>(null);
@@ -102,6 +103,14 @@ export function AgentTracesView({ agentId }: Props) {
             <div className="text-sm text-foreground font-semibold">
               Trace #{selectedTrace.id} | {selectedTrace.trace_type} | {selectedTrace.status}
             </div>
+            {onOpenInChat && selectedTrace.trace_type === "chat" && (
+              <button
+                className="px-3 py-1.5 rounded-md text-xs font-semibold bg-primary text-primary-foreground hover:brightness-110"
+                onClick={() => onOpenInChat(selectedTrace.id)}
+              >
+                Open in Chat
+              </button>
+            )}
             {selectedTrace.error && (
               <div className="p-3 rounded-lg bg-[var(--grade-wrong-bg)] text-[var(--grade-wrong-text)] text-sm">
                 {selectedTrace.error}
