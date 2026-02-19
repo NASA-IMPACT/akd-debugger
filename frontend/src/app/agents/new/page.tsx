@@ -2,21 +2,24 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentsApi } from "@/lib/api/agents";
+import type { AgentOut } from "@/lib/types";
 import { parseAgentCode } from "@/lib/parsers/parse-agent-code";
 import { PageHeader } from "@/components/layout/page-header";
+import { useWorkspace } from "@/providers/workspace-provider";
 
-const inputCls = "w-full px-3 py-2 rounded-lg text-sm outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
+const inputCls = "w-full px-2.5 py-1.5 rounded-md text-[13px] outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
 
 export default function NewAgentPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
+  const { projectId, projects } = useWorkspace();
   const cloneId = searchParams.get("clone");
 
   // Form fields
-  const [inputMode, setInputMode] = useState<"paste" | "manual">(cloneId ? "manual" : "paste");
+  const [inputMode, setInputMode] = useState<"paste" | "manual" | "import">(cloneId ? "manual" : "paste");
   const [code, setCode] = useState("");
   const [extractMsg, setExtractMsg] = useState("");
   const [extractColor, setExtractColor] = useState("text-success");
@@ -28,6 +31,9 @@ export default function NewAgentPage() {
   const [agSettings, setAgSettings] = useState("");
   const [agTags, setAgTags] = useState("");
   const [loaded, setLoaded] = useState(!cloneId);
+  const [importProjectId, setImportProjectId] = useState<number | null>(null);
+  const [importAgentId, setImportAgentId] = useState<number | null>(null);
+  const [importMsg, setImportMsg] = useState("");
 
   // Load clone source
   useEffect(() => {
@@ -42,8 +48,59 @@ export default function NewAgentPage() {
       setAgSettings(a.model_settings ? JSON.stringify(a.model_settings, null, 2) : "");
       setAgTags((a.tags || []).join(", "));
       setLoaded(true);
+    }).catch((err: Error) => {
+      alert(err.message || "Failed to load source agent");
+      router.push("/agents");
     });
-  }, [cloneId]);
+  }, [cloneId, router]);
+
+  const importSourceProjects = projects.filter((p) => p.id !== projectId);
+  const sourceProjectId = importProjectId ?? importSourceProjects[0]?.id ?? null;
+  const {
+    data: importAgents = [],
+    isLoading: importLoading,
+    error: importAgentsError,
+  } = useQuery({
+    queryKey: ["agents-import-source", sourceProjectId],
+    queryFn: () => (
+      sourceProjectId === null
+        ? Promise.resolve([])
+        : agentsApi.listImportable(sourceProjectId)
+    ),
+    enabled: !cloneId && inputMode === "import" && sourceProjectId !== null,
+  });
+  const importError = importAgentsError instanceof Error
+    ? (importAgentsError.message || "Failed to load agents from source project")
+    : "";
+  const selectedImportAgentId = importAgentId && importAgents.some((a) => a.id === importAgentId)
+    ? importAgentId
+    : (importAgents[0]?.id ?? null);
+
+  const applyImportedAgent = (agent: AgentOut) => {
+    setAgName(`${agent.name} (copy)`);
+    setAgExecutor(agent.executor_type);
+    setAgModel(agent.model);
+    setAgPrompt(agent.system_prompt || "");
+    setCode(agent.source_code || "");
+    setAgTools(agent.tools_config ? JSON.stringify(agent.tools_config, null, 2) : "");
+    setAgSettings(agent.model_settings ? JSON.stringify(agent.model_settings, null, 2) : "");
+    setAgTags((agent.tags || []).join(", "));
+  };
+
+  const importSelectedAgent = () => {
+    if (!selectedImportAgentId) {
+      alert("Select an agent to import");
+      return;
+    }
+    const sourceAgent = importAgents.find((a) => a.id === selectedImportAgentId);
+    if (!sourceAgent) {
+      alert("Selected source agent was not found");
+      return;
+    }
+    applyImportedAgent(sourceAgent);
+    setImportMsg(`Imported "${sourceAgent.name}" from project #${sourceAgent.project_id}`);
+    setInputMode("manual");
+  };
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -101,7 +158,7 @@ export default function NewAgentPage() {
     return (
       <>
         <PageHeader title="Clone Agent" backHref="/agents" backLabel="Agents" />
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <div className="skeleton h-5 w-48 mb-3" />
           <div className="skeleton h-4 w-32" />
         </div>
@@ -116,13 +173,16 @@ export default function NewAgentPage() {
       <form onSubmit={(e) => { e.preventDefault(); saveMutation.mutate(); }} className="space-y-5">
         {/* Input mode toggle (only for fresh create) */}
         {!cloneId && (
-          <div className="bg-card rounded-xl border border-border p-5">
+          <div className="bg-card rounded-lg border border-border p-5">
             <div className="flex gap-4 mb-4">
               <label className="flex items-center gap-1.5 text-sm cursor-pointer text-foreground">
                 <input type="radio" checked={inputMode === "paste"} onChange={() => setInputMode("paste")} className="accent-[var(--primary)]" /> Paste Code
               </label>
               <label className="flex items-center gap-1.5 text-sm cursor-pointer text-foreground">
                 <input type="radio" checked={inputMode === "manual"} onChange={() => setInputMode("manual")} className="accent-[var(--primary)]" /> Manual Entry
+              </label>
+              <label className="flex items-center gap-1.5 text-sm cursor-pointer text-foreground">
+                <input type="radio" checked={inputMode === "import"} onChange={() => setInputMode("import")} className="accent-[var(--primary)]" /> Import Agent
               </label>
             </div>
 
@@ -131,8 +191,77 @@ export default function NewAgentPage() {
                 <label className="block font-medium text-sm text-muted mb-1.5">Paste OpenAI Agent Code</label>
                 <textarea className={`${inputCls} text-xs font-mono resize-y`} rows={12} value={code} onChange={(e) => setCode(e.target.value)} placeholder="Paste your agent code here (Python or TypeScript)..." />
                 <div className="flex gap-2 mt-2">
-                  <button type="button" className="px-4 py-2 bg-card border border-border rounded-lg font-semibold text-sm hover:bg-[var(--surface-hover)] text-foreground transition-colors" onClick={extractFromCode}>Extract Config</button>
+                  <button type="button" className="btn-subtle" onClick={extractFromCode}>Extract Config</button>
                   {extractMsg && <span className={`text-sm self-center ${extractColor}`}>{extractMsg}</span>}
+                </div>
+              </div>
+            )}
+
+            {inputMode === "import" && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block font-medium text-sm text-muted mb-1.5">Source Project</label>
+                    <select
+                      className={inputCls}
+                      value={sourceProjectId ?? ""}
+                      onChange={(e) => {
+                        const parsed = Number(e.target.value);
+                        setImportProjectId(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+                        setImportAgentId(null);
+                        setImportMsg("");
+                      }}
+                    >
+                      <option value="">Select project...</option>
+                      {importSourceProjects.map((p) => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block font-medium text-sm text-muted mb-1.5">Agent</label>
+                    <select
+                      className={inputCls}
+                      value={selectedImportAgentId ?? ""}
+                      onChange={(e) => {
+                        const parsed = Number(e.target.value);
+                        setImportAgentId(Number.isFinite(parsed) && parsed > 0 ? parsed : null);
+                        setImportMsg("");
+                      }}
+                      disabled={!sourceProjectId || importLoading || importAgents.length === 0}
+                    >
+                      {!sourceProjectId ? (
+                        <option value="">Select source project first...</option>
+                      ) : importLoading ? (
+                        <option value="">Loading agents...</option>
+                      ) : importAgents.length === 0 ? (
+                        <option value="">No agents found in source project</option>
+                      ) : (
+                        importAgents.map((a) => (
+                          <option key={a.id} value={a.id}>
+                            {a.name} ({a.model})
+                          </option>
+                        ))
+                      )}
+                    </select>
+                  </div>
+                </div>
+                {importSourceProjects.length === 0 && (
+                  <div className="text-sm text-muted">
+                    Create another project first, then you can import agents from it.
+                  </div>
+                )}
+                {importError && <div className="text-sm text-destructive">{importError}</div>}
+                <div className="flex gap-2 items-center">
+                  <button
+                    type="button"
+                    className="btn-subtle"
+                    onClick={importSelectedAgent}
+                    disabled={!sourceProjectId || !selectedImportAgentId || importLoading}
+                  >
+                    Load Agent Into Form
+                  </button>
+                  {importMsg && <span className="text-sm text-success">{importMsg}</span>}
                 </div>
               </div>
             )}
@@ -140,7 +269,7 @@ export default function NewAgentPage() {
         )}
 
         {/* Name + Executor */}
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <div className="grid grid-cols-2 gap-4 mb-4">
             <div>
               <label className="block font-medium text-sm text-muted mb-1.5">Name</label>
@@ -166,13 +295,13 @@ export default function NewAgentPage() {
         </div>
 
         {/* System Prompt */}
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <label className="block font-medium text-sm text-muted mb-2">System Prompt</label>
           <textarea className={`${inputCls} text-xs font-mono resize-y`} rows={10} value={agPrompt} onChange={(e) => setAgPrompt(e.target.value)} />
         </div>
 
         {/* Tools Config */}
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <label className="block font-medium text-sm text-muted mb-2">Tools Config (JSON)</label>
           <textarea
             className={`${inputCls} text-xs font-mono resize-y`}
@@ -184,7 +313,7 @@ export default function NewAgentPage() {
         </div>
 
         {/* Model Settings */}
-        <div className="bg-card rounded-xl border border-border p-5">
+        <div className="bg-card rounded-lg border border-border p-5">
           <label className="block font-medium text-sm text-muted mb-2">Model Settings (JSON)</label>
           <textarea
             className={`${inputCls} text-xs font-mono resize-y`}
@@ -197,10 +326,10 @@ export default function NewAgentPage() {
 
         {/* Actions */}
         <div className="flex justify-end gap-3">
-          <button type="button" onClick={() => router.push("/agents")} className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors">
+          <button type="button" onClick={() => router.push("/agents")} className="btn-subtle">
             Cancel
           </button>
-          <button type="submit" className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all disabled:opacity-50" disabled={saveMutation.isPending}>
+          <button type="submit" className="btn-subtle btn-subtle-primary disabled:opacity-50" disabled={saveMutation.isPending}>
             {saveMutation.isPending ? "Creating..." : "Create Agent"}
           </button>
         </div>

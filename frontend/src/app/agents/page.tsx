@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useTagFilter } from "@/providers/tag-filter-provider";
+import { useWorkspace } from "@/providers/workspace-provider";
 import { agentsApi } from "@/lib/api/agents";
 import type { AgentOut } from "@/lib/types";
 import { PageHeader } from "@/components/layout/page-header";
@@ -55,7 +56,7 @@ function AgentCard({ agent, onDelete }: { agent: AgentOut; onDelete: () => void 
 
   return (
     <div
-      className="bg-card rounded-xl border border-border p-5 shadow-sm transition-all hover:shadow-md hover:border-brand/30 cursor-pointer group"
+      className="bg-card rounded-lg border border-border p-5 transition-all hover:shadow-md hover:border-brand/30 cursor-pointer group"
       onClick={(e) => {
         if ((e.target as HTMLElement).closest("[data-stop-propagation]")) return;
         router.push(`/agents/${agent.id}`);
@@ -145,13 +146,16 @@ function AgentCard({ agent, onDelete }: { agent: AgentOut; onDelete: () => void 
 
 export default function AgentsPage() {
   const { tag } = useTagFilter();
+  const { organizationId, projectId, workspaceReady } = useWorkspace();
   const queryClient = useQueryClient();
   const [deleteModal, setDeleteModal] = useState<{ id: number; name: string } | null>(null);
 
-  const { data: agents = [], isLoading } = useQuery({
-    queryKey: ["agents", tag],
+  const { data: agents = [], isLoading, isError, error } = useQuery({
+    queryKey: ["agents", organizationId, projectId, tag],
     queryFn: () => agentsApi.list(tag || undefined),
+    enabled: workspaceReady,
   });
+  const showLoading = !workspaceReady || isLoading;
 
   const deleteMutation = useMutation({
     mutationFn: (id: number) => agentsApi.delete(id),
@@ -168,17 +172,17 @@ export default function AgentsPage() {
           <span className="text-sm text-muted">{agents.length} agent{agents.length !== 1 ? "s" : ""}</span>
           <Link
             href="/agents/new"
-            className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-semibold text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all no-underline"
+            className="btn-subtle btn-subtle-primary no-underline"
           >
             + New Agent
           </Link>
         </div>
       </PageHeader>
 
-      {isLoading ? (
+      {showLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-card rounded-xl border border-border p-5">
+            <div key={i} className="bg-card rounded-lg border border-border p-5">
               <div className="flex items-center gap-2 mb-3">
                 <div className="skeleton h-5 w-40" />
                 <div className="skeleton h-5 w-20 rounded-md" />
@@ -189,13 +193,19 @@ export default function AgentsPage() {
             </div>
           ))}
         </div>
+      ) : isError ? (
+        <div className="bg-card rounded-lg border border-border py-16 text-center">
+          <p className="text-muted text-sm mb-3">
+            Failed to load agents: {(error as Error).message}
+          </p>
+        </div>
       ) : agents.length === 0 ? (
-        <div className="bg-card rounded-xl border border-border shadow-sm py-20 text-center">
+        <div className="bg-card rounded-lg border border-border py-16 text-center">
           <Bot size={40} className="mx-auto text-muted-light mb-3" />
           <p className="text-muted text-sm mb-3">No agents found. Create one to get started.</p>
           <Link
             href="/agents/new"
-            className="inline-block px-4 py-2 bg-primary text-primary-foreground rounded-xl font-semibold text-sm hover:brightness-110 transition-all no-underline"
+            className="btn-subtle btn-subtle-primary no-underline"
           >
             + New Agent
           </Link>
@@ -215,7 +225,7 @@ export default function AgentsPage() {
       {/* Delete Confirmation Modal */}
       {deleteModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop" onClick={(e) => e.target === e.currentTarget && setDeleteModal(null)}>
-          <div className="bg-card border border-border rounded-2xl w-[420px] p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[420px] p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-foreground">Delete Agent</h3>
               <button className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setDeleteModal(null)}>
@@ -226,9 +236,9 @@ export default function AgentsPage() {
               Delete <strong>{deleteModal.name}</strong>? This cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
-              <button className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setDeleteModal(null)}>Cancel</button>
+              <button className="btn-subtle" onClick={() => setDeleteModal(null)}>Cancel</button>
               <button
-                className="px-4 py-2 bg-destructive text-white rounded-xl font-medium text-sm shadow-lg shadow-destructive/25 hover:brightness-110 hover:-translate-y-px transition-all"
+                className="btn-subtle btn-subtle-danger"
                 onClick={() => deleteMutation.mutate(deleteModal.id)}
               >
                 {deleteMutation.isPending ? "Deleting..." : "Delete"}

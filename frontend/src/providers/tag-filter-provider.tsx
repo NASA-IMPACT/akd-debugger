@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { suitesApi } from "@/lib/api/suites";
 import { agentsApi } from "@/lib/api/agents";
 import { runsApi } from "@/lib/api/runs";
+import { useWorkspace } from "@/providers/workspace-provider";
 
 interface TagFilterCtx {
   tag: string;
@@ -27,8 +28,11 @@ export function TagFilterProvider({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const tag = searchParams.get("tag") || "";
   const [allTags, setAllTags] = useState<string[]>([]);
+  const { organizationId, projectId, workspaceReady } = useWorkspace();
 
   useEffect(() => {
+    if (!workspaceReady) return;
+    let active = true;
     async function load() {
       try {
         const [suites, agents, runs] = await Promise.all([
@@ -40,13 +44,16 @@ export function TagFilterProvider({ children }: { children: ReactNode }) {
         [...suites, ...agents, ...runs].forEach((item) => {
           (item.tags || []).forEach((t: string) => tags.add(t));
         });
-        setAllTags([...tags].sort());
+        if (active) setAllTags([...tags].sort());
       } catch {
         // ignore
       }
     }
-    load();
-  }, []);
+    void load();
+    return () => {
+      active = false;
+    };
+  }, [workspaceReady, organizationId, projectId]);
 
   const setTag = useCallback(
     (t: string) => {

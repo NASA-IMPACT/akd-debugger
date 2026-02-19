@@ -12,6 +12,9 @@ from models.grade import Grade
 from models.result import Result
 from schemas.schemas import GradeCreate, GradeOut
 from services.db_utils import get_or_404
+from services.context import get_request_context
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter
 
 router = APIRouter()
 
@@ -20,6 +23,8 @@ router = APIRouter()
 async def upsert_grade(
     result_id: int, body: GradeCreate, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "results.grade")
     result = await get_or_404(db, Result, result_id, "Result")
     if body.grade not in ("correct", "partial", "wrong"):
         raise HTTPException(400, "Grade must be correct, partial, or wrong")
@@ -66,6 +71,7 @@ async def import_grades_csv(
         .where(Result.run_id == run_id)
         .options(selectinload(Result.query), selectinload(Result.grade))
     )
+    stmt = apply_workspace_filter(stmt, Result, ctx)
     results = (await db.execute(stmt)).scalars().all()
     if not results:
         raise HTTPException(404, "No results found for this run")
@@ -126,3 +132,5 @@ async def import_grades_csv(
 
     await db.commit()
     return {"imported": imported, "skipped": skipped, "errors": errors}
+    ctx = get_request_context()
+    await require_permission(db, ctx, "results.grade")

@@ -14,9 +14,10 @@ import { runsApi } from "@/lib/api/runs";
 import { tracesApi } from "@/lib/api/traces";
 import type { ReasoningStep, ToolCall } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
+import { useAuth } from "@/providers/auth-provider";
 
 function ElapsedTime({ since }: { since: string }) {
-  const [now, setNow] = useState(Date.now());
+  const [now, setNow] = useState(() => new Date(since).getTime());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
@@ -28,7 +29,8 @@ function ElapsedTime({ since }: { since: string }) {
 }
 
 export default function RunningJobsPage() {
-  const [mode, setMode] = useState<"active" | "past">("active");
+  const { user } = useAuth();
+  const [mode, setMode] = useState<"active" | "all">("active");
   const [selectedRetryTraceId, setSelectedRetryTraceId] = useState<number | null>(null);
   const [activeRunsCollapsed, setActiveRunsCollapsed] = useState(false);
   const [activeRetriesCollapsed, setActiveRetriesCollapsed] = useState(false);
@@ -36,24 +38,27 @@ export default function RunningJobsPage() {
   const [pastRunsCollapsed, setPastRunsCollapsed] = useState(false);
   const [toolModal, setToolModal] = useState<{ toolCalls: ToolCall[]; idx: number } | null>(null);
 
-  const { data, isLoading, refetch } = useQuery({
+  const { data, isLoading } = useQuery({
     queryKey: ["running-jobs"],
     queryFn: () => runsApi.listJobs(),
-    refetchInterval: 2500,
+    enabled: !!user,
+    refetchInterval: user ? 2500 : false,
     refetchIntervalInBackground: true,
   });
   const { data: allRuns = [], isLoading: loadingPastRuns } = useQuery({
     queryKey: ["runs-all"],
     queryFn: () => runsApi.list(),
+    enabled: !!user,
   });
   const { data: retryTraces = [], isLoading: loadingPastRetries } = useQuery({
     queryKey: ["retry-traces-all"],
     queryFn: () => tracesApi.list({ traceType: "retry", limit: 300 }),
+    enabled: !!user,
   });
   const { data: selectedRetryTrace } = useQuery({
     queryKey: ["retry-trace-detail", selectedRetryTraceId],
     queryFn: () => tracesApi.get(selectedRetryTraceId!),
-    enabled: selectedRetryTraceId !== null,
+    enabled: !!user && selectedRetryTraceId !== null,
     refetchInterval: (query) => {
       const trace = query.state.data;
       return trace?.status === "started" ? 2000 : false;
@@ -62,7 +67,7 @@ export default function RunningJobsPage() {
   const { data: selectedRetryRun } = useQuery({
     queryKey: ["retry-trace-run", selectedRetryTrace?.run_id],
     queryFn: () => runsApi.get(selectedRetryTrace!.run_id!),
-    enabled: !!selectedRetryTrace?.run_id,
+    enabled: !!user && !!selectedRetryTrace?.run_id,
   });
 
   const jobs = data || { runs: [], cost_previews: [], single_queries: [] };
@@ -103,34 +108,27 @@ export default function RunningJobsPage() {
     <>
       <PageHeader
         title="Runs"
-        subtitle={<div className="text-sm text-muted mt-1">Track active and past benchmark runs, previews, and retries</div>}
-      >
-        <button
-          onClick={() => refetch()}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-semibold text-sm"
-        >
-          Refresh
-        </button>
-      </PageHeader>
+        subtitle={<div className="text-sm text-muted mt-1">Track active and all benchmark runs, previews, and retries</div>}
+      />
 
       <div className="mb-4 flex items-center gap-2">
         <button
-          className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${mode === "active" ? "bg-primary text-primary-foreground" : "bg-[var(--surface)] border border-border text-muted hover:text-foreground"}`}
+          className={`btn-subtle ${mode === "active" ? "btn-subtle-primary" : ""}`}
           onClick={() => setMode("active")}
         >
           Active ({activeTotal})
         </button>
         <button
-          className={`px-3 py-1.5 rounded-lg text-sm font-semibold ${mode === "past" ? "bg-primary text-primary-foreground" : "bg-[var(--surface)] border border-border text-muted hover:text-foreground"}`}
-          onClick={() => setMode("past")}
+          className={`btn-subtle ${mode === "all" ? "btn-subtle-primary" : ""}`}
+          onClick={() => setMode("all")}
         >
-          Past ({pastTotal})
+          All ({pastTotal})
         </button>
       </div>
 
       {mode === "active" ? (
         <div className="space-y-4">
-          <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <section className="bg-card rounded-lg border border-border overflow-hidden">
             <button
               type="button"
               className="w-full px-4 py-3 border-b border-border font-semibold text-sm text-left flex items-center justify-between hover:bg-[var(--surface-hover)] transition-colors"
@@ -165,7 +163,7 @@ export default function RunningJobsPage() {
             )}
           </section>
 
-          <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <section className="bg-card rounded-lg border border-border overflow-hidden">
             <button
               type="button"
               className="w-full px-4 py-3 border-b border-border font-semibold text-sm text-left flex items-center justify-between hover:bg-[var(--surface-hover)] transition-colors"
@@ -197,14 +195,14 @@ export default function RunningJobsPage() {
         </div>
       ) : (
         <div className="space-y-4">
-          <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <section className="bg-card rounded-lg border border-border overflow-hidden">
             <button
               type="button"
               className="w-full px-4 py-3 border-b border-border font-semibold text-sm text-left flex items-center justify-between hover:bg-[var(--surface-hover)] transition-colors"
               onClick={() => setPastRetriesCollapsed((v) => !v)}
               aria-expanded={!pastRetriesCollapsed}
             >
-              <span>Past Single Query Retries</span>
+              <span>All Single Query Retries</span>
               {pastRetriesCollapsed ? <ChevronRight size={16} className="text-muted" aria-hidden="true" /> : <ChevronDown size={16} className="text-muted" aria-hidden="true" />}
             </button>
             {!pastRetriesCollapsed && (
@@ -212,7 +210,7 @@ export default function RunningJobsPage() {
                 {isLoadingPast ? (
                   <div className="p-4 text-sm text-muted">Loading...</div>
                 ) : pastRetries.length === 0 ? (
-                  <div className="p-4 text-sm text-muted">No past single-query retries found.</div>
+                  <div className="p-4 text-sm text-muted">No single-query retries found.</div>
                 ) : (
                   pastRetries.slice(0, 200).map((trace) => (
                     <button
@@ -231,14 +229,14 @@ export default function RunningJobsPage() {
             )}
           </section>
 
-          <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+          <section className="bg-card rounded-lg border border-border overflow-hidden">
             <button
               type="button"
               className="w-full px-4 py-3 border-b border-border font-semibold text-sm text-left flex items-center justify-between hover:bg-[var(--surface-hover)] transition-colors"
               onClick={() => setPastRunsCollapsed((v) => !v)}
               aria-expanded={!pastRunsCollapsed}
             >
-              <span>Past Benchmark Runs</span>
+              <span>All Benchmark Runs</span>
               {pastRunsCollapsed ? <ChevronRight size={16} className="text-muted" aria-hidden="true" /> : <ChevronDown size={16} className="text-muted" aria-hidden="true" />}
             </button>
             {!pastRunsCollapsed && (
@@ -246,7 +244,7 @@ export default function RunningJobsPage() {
                 {isLoadingPast ? (
                   <div className="p-4 text-sm text-muted">Loading...</div>
                 ) : pastRuns.length === 0 ? (
-                  <div className="p-4 text-sm text-muted">No past benchmark runs found.</div>
+                  <div className="p-4 text-sm text-muted">No benchmark runs found.</div>
                 ) : (
                   pastRuns.slice(0, 200).map((run) => (
                     <div key={`past-run-${run.id}`} className="px-4 py-3 border-b last:border-b-0 border-border/70 flex items-center justify-between gap-3">
@@ -279,7 +277,7 @@ export default function RunningJobsPage() {
             <div className="flex items-center justify-between mb-3">
               <h3 className="text-xl font-semibold">Retry Trace #{selectedRetryTrace.id}</h3>
               <button
-                className="text-sm px-3 py-1.5 bg-[var(--surface-hover)] border border-border rounded-lg"
+                className="btn-subtle"
                 onClick={() => setSelectedRetryTraceId(null)}
               >
                 Close
@@ -350,7 +348,7 @@ export default function RunningJobsPage() {
                       </div>
                     </div>
                   </div>
-                  {(selectedRetryTrace.request_payload as Record<string, unknown>)?.system_prompt && (
+                  {Boolean((selectedRetryTrace.request_payload as Record<string, unknown>)?.system_prompt) && (
                     <div>
                       <div className="text-sm font-semibold text-foreground mb-1.5">System Prompt</div>
                       <div className="p-3 rounded-lg border border-border bg-[var(--surface-hover)] text-xs text-muted max-h-[120px] overflow-y-auto whitespace-pre-wrap">
@@ -359,7 +357,7 @@ export default function RunningJobsPage() {
                       </div>
                     </div>
                   )}
-                  {(selectedRetryTrace.request_payload as Record<string, unknown>)?.tools_config && (
+                  {Boolean((selectedRetryTrace.request_payload as Record<string, unknown>)?.tools_config) && (
                     <div>
                       <div className="text-sm font-semibold text-foreground mb-1.5">Tools</div>
                       <div className="p-3 rounded-lg border border-border bg-[var(--surface-hover)] text-xs text-muted">

@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Any, Union
+from typing import Any, Literal, Union
 
 from pydantic import BaseModel
 
@@ -9,12 +9,14 @@ class SuiteCreate(BaseModel):
     name: str
     description: str | None = None
     tags: list[str] = []
+    visibility_scope: str = "project"
 
 
 class SuiteUpdate(BaseModel):
     name: str | None = None
     description: str | None = None
     tags: list[str] | None = None
+    visibility_scope: str | None = None
 
 
 class QueryOut(BaseModel):
@@ -32,6 +34,10 @@ class QueryOut(BaseModel):
 
 class SuiteOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int
+    created_by_user_id: int | None
+    visibility_scope: str = "project"
     name: str
     description: str | None
     tags: list[str]
@@ -64,6 +70,7 @@ class AgentCreate(BaseModel):
     tools_config: Union[dict, list, None] = None
     model_settings: dict | None = None
     tags: list[str] = []
+    visibility_scope: str = "project"
 
 
 class AgentUpdate(BaseModel):
@@ -75,10 +82,15 @@ class AgentUpdate(BaseModel):
     tools_config: Union[dict, list, None] = None
     model_settings: dict | None = None
     tags: list[str] | None = None
+    visibility_scope: str | None = None
 
 
 class AgentOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int
+    created_by_user_id: int | None
+    visibility_scope: str = "project"
     name: str
     executor_type: str
     model: str
@@ -99,6 +111,7 @@ class ChatMessageIn(BaseModel):
 
 class AgentChatRequest(BaseModel):
     messages: list[ChatMessageIn]
+    conversation_id: str | None = None
 
 
 class AgentChatResponse(BaseModel):
@@ -122,12 +135,17 @@ class RunCreate(BaseModel):
     tags: list[str] = []
     batch_size: int = 10
     query_ids: list[int] | None = None  # None = all queries
-    output_dir: str | None = None  # default ~/axiom_data/<label>
+    output_dir: str | None = None  # default ~/akd_data/<label>
     repeat: int = 1  # run N times
+    visibility_scope: str = "project"
 
 
 class RunCostPreviewOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int
+    created_by_user_id: int | None
+    visibility_scope: str = "project"
     suite_id: int
     suite_name: str = ""
     agent_config_id: int
@@ -154,6 +172,10 @@ class RunCostPreviewOut(BaseModel):
 
 class RunCostPreviewRecordOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int
+    created_by_user_id: int | None
+    visibility_scope: str = "project"
     suite_id: int
     suite_name: str = ""
     agent_config_id: int
@@ -186,6 +208,9 @@ class RunCostPreviewRecordOut(BaseModel):
 
 class AppNotificationOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int | None
+    user_id: int | None
     notif_type: str
     title: str
     message: str
@@ -198,6 +223,10 @@ class AppNotificationOut(BaseModel):
 
 class RunOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int
+    created_by_user_id: int | None
+    visibility_scope: str = "project"
     suite_id: int
     agent_config_id: int
     label: str
@@ -225,6 +254,10 @@ class RunDetailOut(RunOut):
 # --- Result ---
 class ResultOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int
+    created_by_user_id: int | None
+    visibility_scope: str = "project"
     run_id: int
     query_id: int
     parent_result_id: int | None = None
@@ -317,6 +350,10 @@ class ComparisonCreate(BaseModel):
 
 class ComparisonOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int
+    created_by_user_id: int | None = None
+    visibility_scope: str = "project"
     name: str | None
     suite_id: int
     suite_name: str = ""
@@ -331,9 +368,13 @@ class ComparisonOut(BaseModel):
 # --- Tracing ---
 class TraceLogOut(BaseModel):
     id: int
+    organization_id: int
+    project_id: int
+    created_by_user_id: int | None = None
     run_id: int | None
     query_id: int | None
     agent_config_id: int | None
+    conversation_id: str | None = None
     trace_type: str
     provider: str
     endpoint: str
@@ -377,3 +418,217 @@ class RunningJobsOut(BaseModel):
     runs: list[RunningJobItem] = []
     cost_previews: list[RunningJobItem] = []
     single_queries: list[RunningJobItem] = []
+
+
+# --- Auth / Workspace ---
+class UserOut(BaseModel):
+    id: int
+    full_name: str
+    email: str
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class AuthSignupIn(BaseModel):
+    full_name: str
+    email: str
+    password: str
+    invitation_token: str | None = None
+
+
+class AuthLoginIn(BaseModel):
+    email: str
+    password: str
+
+
+class AuthPasswordForgotIn(BaseModel):
+    email: str
+
+
+class AuthPasswordResetIn(BaseModel):
+    token: str
+    password: str
+
+
+class AuthAdminPasswordResetIn(BaseModel):
+    user_id: int
+
+
+class AuthSessionOut(BaseModel):
+    user: UserOut
+    organizations: list["OrganizationOut"] = []
+    active_organization_id: int | None = None
+
+
+class OrganizationCreate(BaseModel):
+    name: str
+
+
+class OrganizationUpdate(BaseModel):
+    name: str | None = None
+
+
+class OrganizationOut(BaseModel):
+    id: int
+    name: str
+    slug: str
+    is_personal: bool
+    is_bootstrap: bool
+    owner_user_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectCreate(BaseModel):
+    name: str
+    description: str | None = None
+
+
+class ProjectUpdate(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    is_archived: bool | None = None
+
+
+class ProjectOut(BaseModel):
+    id: int
+    organization_id: int
+    name: str
+    description: str | None
+    is_archived: bool
+    created_by_user_id: int | None
+    created_at: datetime
+    updated_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class PermissionOut(BaseModel):
+    id: int
+    key: str
+    resource: str
+    action: str
+    description: str | None
+
+    model_config = {"from_attributes": True}
+
+
+class RoleOut(BaseModel):
+    id: int
+    organization_id: int
+    name: str
+    slug: str
+    is_builtin: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RolePermissionUpdate(BaseModel):
+    permission_id: int
+    effect: Literal["allow", "deny"] = "allow"
+
+
+class RoleCreate(BaseModel):
+    name: str
+    slug: str
+
+
+class InvitationProjectAssignment(BaseModel):
+    project_id: int
+    role_id: int | None = None
+
+
+class InvitationCreate(BaseModel):
+    email: str
+    org_role_id: int | None = None
+    project_assignments: list[InvitationProjectAssignment] = []
+
+
+class InvitationAcceptIn(BaseModel):
+    token: str
+    full_name: str | None = None
+    password: str | None = None
+
+
+class InvitationOut(BaseModel):
+    id: int
+    organization_id: int
+    email: str
+    invited_by_user_id: int | None
+    org_role_id: int | None
+    project_assignments: list[dict]
+    expires_at: datetime
+    accepted_at: datetime | None
+    revoked_at: datetime | None
+    created_at: datetime
+    invite_link: str | None = None
+
+    model_config = {"from_attributes": True}
+
+
+class MembershipOut(BaseModel):
+    id: int
+    organization_id: int
+    user_id: int
+    user_full_name: str | None = None
+    user_email: str | None = None
+    role_id: int | None
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class ProjectMembershipOut(BaseModel):
+    id: int
+    organization_id: int
+    project_id: int
+    user_id: int
+    user_full_name: str | None = None
+    user_email: str | None = None
+    role_id: int | None
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class MembershipCreate(BaseModel):
+    user_id: int
+    role_id: int | None = None
+
+
+class ProjectMembershipCreate(BaseModel):
+    user_id: int
+    role_id: int | None = None
+
+
+class UserPermissionGrantCreate(BaseModel):
+    user_id: int
+    permission_id: int
+    effect: Literal["allow", "deny"] = "allow"
+    project_id: int | None = None
+    resource_type: str | None = None
+    resource_id: int | None = None
+    expires_at: datetime | None = None
+
+
+class UserPermissionGrantOut(BaseModel):
+    id: int
+    organization_id: int
+    project_id: int | None
+    user_id: int
+    permission_id: int
+    effect: Literal["allow", "deny"]
+    resource_type: str | None
+    resource_id: int | None
+    granted_by_user_id: int | None
+    expires_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}

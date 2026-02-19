@@ -11,7 +11,7 @@ export function AccuracyByType({ byType }: Props) {
   if (!entries.length) return null;
 
   return (
-    <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+    <div className="bg-card rounded-lg p-6 px-8 mb-6">
       <h2 className="text-lg font-semibold mb-4 pb-2 border-b-2 border-border text-brand-dark">Accuracy by Query Type</h2>
       <table className="w-full text-sm">
         <thead>

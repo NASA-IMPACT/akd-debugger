@@ -67,12 +67,12 @@ export default function CostPreviewsPage() {
       <PageHeader title="Cost Previews" subtitle={<div className="text-sm text-muted mt-1">Background cost preview jobs and results</div>}>
         <button
           onClick={() => refetch()}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-semibold text-sm"
+          className="px-3.5 py-1.5 bg-primary text-primary-foreground rounded-md font-medium text-[13px]"
         >
           Refresh
         </button>
       </PageHeader>
-      <div className="bg-card rounded-xl border border-border shadow-sm overflow-x-auto">
+      <div className="bg-card rounded-lg border border-border overflow-x-auto">
         {isLoading ? (
           <div className="p-4 text-sm text-muted">Loading...</div>
         ) : previews.length === 0 ? (
@@ -125,11 +125,11 @@ export default function CostPreviewsPage() {
 
       {selected && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center" onClick={(e) => e.target === e.currentTarget && setSelected(null)}>
-          <div className="bg-card border border-border rounded-xl w-[95%] max-w-[980px] max-h-[85vh] overflow-y-auto p-6 shadow-2xl">
+          <div className="bg-card border border-border rounded-lg w-[95%] max-w-[980px] max-h-[85vh] overflow-y-auto p-6 shadow-2xl">
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-xl font-semibold">Cost Preview #{selected.id}</h3>
+              <h3 className="text-lg font-semibold">Cost Preview #{selected.id}</h3>
               <div className="flex items-center gap-2">
-                <button className="text-sm px-3 py-1.5 bg-[var(--surface-hover)] border border-border rounded-lg" onClick={() => setSelected(null)}>
+                <button className="text-[13px] px-3 py-1.5 bg-[var(--surface-hover)] border border-border rounded-md" onClick={() => setSelected(null)}>
                   Close
                 </button>
               </div>

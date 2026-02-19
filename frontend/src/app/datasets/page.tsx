@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useTagFilter } from "@/providers/tag-filter-provider";
+import { useWorkspace } from "@/providers/workspace-provider";
 import { suitesApi } from "@/lib/api/suites";
 import { PageHeader } from "@/components/layout/page-header";
 import { TagBadge } from "@/components/ui/tag-badge";
@@ -12,6 +13,7 @@ import { Database, X, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
 
 export default function DatasetsPage() {
   const { tag } = useTagFilter();
+  const { organizationId, projectId, workspaceReady } = useWorkspace();
   const router = useRouter();
   const queryClient = useQueryClient();
 
@@ -23,10 +25,12 @@ export default function DatasetsPage() {
   const [menuOpen, setMenuOpen] = useState<number | null>(null);
   const [deleteModal, setDeleteModal] = useState<{ id: number; name: string } | null>(null);
 
-  const { data: suites = [], isLoading } = useQuery({
-    queryKey: ["suites", tag],
+  const { data: suites = [], isLoading, isError, error } = useQuery({
+    queryKey: ["suites", organizationId, projectId, tag],
     queryFn: () => suitesApi.list(tag || undefined),
+    enabled: workspaceReady,
   });
+  const showLoading = !workspaceReady || isLoading;
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -69,27 +73,33 @@ export default function DatasetsPage() {
     setModal(true);
   };
 
-  const inputCls = "w-full px-3 py-2 rounded-lg text-sm outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
+  const inputCls = "w-full px-2.5 py-1.5 rounded-md text-[13px] outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
 
   return (
     <>
       <PageHeader title="Datasets">
-        <button className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-semibold text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all" onClick={openCreate}>
+        <button className="btn-subtle btn-subtle-primary" onClick={openCreate}>
           + New Dataset
         </button>
       </PageHeader>
 
-      {isLoading ? (
+      {showLoading ? (
         <div className="space-y-3">
           {[...Array(3)].map((_, i) => (
-            <div key={i} className="bg-card rounded-xl border border-border p-5">
+            <div key={i} className="bg-card rounded-lg border border-border p-5">
               <div className="skeleton h-5 w-40 mb-2" />
               <div className="skeleton h-3 w-24" />
             </div>
           ))}
         </div>
+      ) : isError ? (
+        <div className="bg-card rounded-lg border border-border py-16 text-center">
+          <p className="text-muted text-sm">
+            Failed to load datasets: {(error as Error).message}
+          </p>
+        </div>
       ) : suites.length === 0 ? (
-        <div className="bg-card rounded-xl border border-border shadow-sm py-20 text-center">
+        <div className="bg-card rounded-lg border border-border py-16 text-center">
           <Database size={40} className="mx-auto text-muted-light mb-3" />
           <p className="text-muted text-sm">No datasets found. Create one to get started.</p>
         </div>
@@ -98,7 +108,7 @@ export default function DatasetsPage() {
           {suites.map((s) => (
             <div
               key={s.id}
-              className="bg-card rounded-xl border border-border p-5 shadow-sm flex justify-between items-center cursor-pointer hover:bg-[var(--surface-hover)] transition-colors group"
+              className="bg-card rounded-lg border border-border p-5 flex justify-between items-center cursor-pointer hover:bg-[var(--surface-hover)] transition-colors group"
               onClick={(e) => {
                 if ((e.target as HTMLElement).closest("button")) return;
                 router.push(`/datasets/${s.id}`);
@@ -133,9 +143,9 @@ export default function DatasetsPage() {
       {/* Create/Edit Modal */}
       {modal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop" onClick={(e) => e.target === e.currentTarget && setModal(false)}>
-          <div className="bg-card border border-border rounded-2xl w-[90%] max-w-[500px] p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[90%] max-w-[500px] p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-semibold text-foreground">{editId ? "Edit Dataset" : "New Dataset"}</h3>
+              <h3 className="text-lg font-semibold text-foreground">{editId ? "Edit Dataset" : "New Dataset"}</h3>
               <button className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setModal(false)}>
                 <X size={18} />
               </button>
@@ -154,8 +164,8 @@ export default function DatasetsPage() {
                 <input className={inputCls} value={tagStr} onChange={(e) => setTagStr(e.target.value)} />
               </div>
               <div className="flex justify-end gap-3 mt-6">
-                <button type="button" className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setModal(false)}>Cancel</button>
-                <button type="submit" className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all disabled:opacity-50" disabled={saveMutation.isPending}>
+                <button type="button" className="btn-subtle" onClick={() => setModal(false)}>Cancel</button>
+                <button type="submit" className="btn-subtle btn-subtle-primary disabled:opacity-50" disabled={saveMutation.isPending}>
                   {saveMutation.isPending ? "Saving..." : "Save"}
                 </button>
               </div>
@@ -167,7 +177,7 @@ export default function DatasetsPage() {
       {/* Delete Confirmation Modal */}
       {deleteModal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop" onClick={(e) => e.target === e.currentTarget && setDeleteModal(null)}>
-          <div className="bg-card border border-border rounded-2xl w-[420px] p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[420px] p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-foreground">Delete Dataset</h3>
               <button className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setDeleteModal(null)}>
@@ -178,9 +188,9 @@ export default function DatasetsPage() {
               Delete <strong>{deleteModal.name}</strong> and all its queries? This cannot be undone.
             </p>
             <div className="flex justify-end gap-3">
-              <button className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors" onClick={() => setDeleteModal(null)}>Cancel</button>
+              <button className="btn-subtle" onClick={() => setDeleteModal(null)}>Cancel</button>
               <button
-                className="px-4 py-2 bg-destructive text-white rounded-xl font-medium text-sm shadow-lg shadow-destructive/25 hover:brightness-110 hover:-translate-y-px transition-all"
+                className="btn-subtle btn-subtle-danger"
                 onClick={() => deleteMutation.mutate(deleteModal.id)}
               >
                 {deleteMutation.isPending ? "Deleting..." : "Delete"}

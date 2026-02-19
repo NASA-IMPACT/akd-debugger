@@ -16,6 +16,8 @@ from schemas.schemas import (
     StatsOut,
 )
 from services.openai_pricing import calculate_cost, get_rate_card
+from services.context import get_request_context
+from services.tenancy import apply_workspace_filter
 
 
 def _tool_call_label(tc: dict) -> str:
@@ -69,7 +71,9 @@ def _grade_counts(grades: list[str]) -> GradeCountsOut:
 
 
 async def compute_run_analytics(run_id: int, db: AsyncSession) -> RunAnalyticsOut:
-    run = await db.get(Run, run_id)
+    ctx = get_request_context()
+    run_stmt = apply_workspace_filter(select(Run).where(Run.id == run_id), Run, ctx)
+    run = (await db.execute(run_stmt)).scalar_one_or_none()
     if not run:
         raise ValueError("Run not found")
     agent = await db.get(AgentConfig, run.agent_config_id)
@@ -78,9 +82,13 @@ async def compute_run_analytics(run_id: int, db: AsyncSession) -> RunAnalyticsOu
     results = (
         (
             await db.execute(
-                select(Result)
-                .where(Result.run_id == run_id)
-                .options(selectinload(Result.grade), selectinload(Result.query))
+                apply_workspace_filter(
+                    select(Result)
+                    .where(Result.run_id == run_id)
+                    .options(selectinload(Result.grade), selectinload(Result.query)),
+                    Result,
+                    ctx,
+                )
             )
         )
         .scalars()
@@ -195,6 +203,7 @@ async def compute_run_analytics(run_id: int, db: AsyncSession) -> RunAnalyticsOu
 async def compute_compare_analytics(
     run_ids: list[int], db: AsyncSession
 ) -> CompareAnalyticsOut:
+    ctx = get_request_context()
     runs_analytics = []
     for rid in run_ids:
         try:
@@ -218,9 +227,13 @@ async def compute_compare_analytics(
         results = (
             (
                 await db.execute(
-                    select(Result)
-                    .where(Result.run_id == rid)
-                    .options(selectinload(Result.grade), selectinload(Result.query))
+                    apply_workspace_filter(
+                        select(Result)
+                        .where(Result.run_id == rid)
+                        .options(selectinload(Result.grade), selectinload(Result.query)),
+                        Result,
+                        ctx,
+                    )
                 )
             )
             .scalars()

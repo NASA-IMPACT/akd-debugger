@@ -1,4 +1,4 @@
-# Axiom
+# AKD
 
 LLM Agent Benchmarking Platform — define suites, run agents, grade outputs, and compare results.
 

@@ -8,7 +8,6 @@ import { comparisonsApi } from "@/lib/api/comparisons";
 import { analyticsApi } from "@/lib/api/analytics";
 import { resultsApi } from "@/lib/api/results";
 import { runsApi } from "@/lib/api/runs";
-import { exportApi } from "@/lib/api/export";
 import { PageHeader } from "@/components/layout/page-header";
 import { GradingView } from "@/components/grading/grading-view";
 import { CompareDashboard } from "@/components/dashboard/compare-dashboard";
@@ -25,8 +24,14 @@ export default function CompareDetailPage() {
   const params = useParams();
   const comparisonId = Number(params.id);
   const [mode, setMode] = useState<Mode>("grading");
+  const [isGradingFocused, setIsGradingFocused] = useState(false);
+  const gradingFocusMode = mode === "grading" && isGradingFocused;
 
-  const { data: comparison, isLoading, isError } = useQuery({
+  const {
+    data: comparison,
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["comparison", comparisonId],
     queryFn: () => comparisonsApi.get(comparisonId),
     enabled: !isNaN(comparisonId),
@@ -43,7 +48,7 @@ export default function CompareDetailPage() {
     return (
       <>
         <PageHeader title="Compare Runs" />
-        <div className="bg-card rounded-xl border border-border shadow-sm p-8 text-center">
+        <div className="bg-card rounded-lg border border-border p-8 text-center">
           <div className="skeleton h-5 w-48 mx-auto mb-2" />
           <div className="skeleton h-4 w-32 mx-auto" />
         </div>
@@ -55,8 +60,11 @@ export default function CompareDetailPage() {
     return (
       <>
         <PageHeader title="Compare Runs" />
-        <div className="bg-card rounded-xl border border-border shadow-sm p-8 text-center">
-          <GitCompareArrows size={40} className="mx-auto text-muted-light mb-3" />
+        <div className="bg-card rounded-lg border border-border p-8 text-center">
+          <GitCompareArrows
+            size={40}
+            className="mx-auto text-muted-light mb-3"
+          />
           <p className="text-muted text-sm">Comparison not found.</p>
         </div>
       </>
@@ -65,41 +73,85 @@ export default function CompareDetailPage() {
 
   return (
     <>
-      <PageHeader title={comparison.name || `Comparison #${comparison.id}`} subtitle={
-        <div className="text-sm text-muted mt-1">Dataset: {comparison.suite_name} &bull; {comparison.run_count} runs</div>
-      } />
+      {!gradingFocusMode && (
+        <PageHeader
+          title={comparison.name || `Comparison #${comparison.id}`}
+          subtitle={
+            <div className="text-sm text-muted mt-1">
+              Dataset: {comparison.suite_name} &bull; {comparison.run_count} runs
+            </div>
+          }
+        />
+      )}
 
-      <div className="flex gap-1 mb-4 bg-[var(--surface-hover)] border border-border rounded-lg p-1 w-fit">
-        {(["grading", "dashboard", "compare", "traces", "config"] as Mode[]).map((m) => (
-          <button key={m} className={cn("px-4 py-1.5 rounded-md text-sm font-semibold transition-colors", mode === m ? "bg-primary text-primary-foreground shadow-sm" : "text-muted hover:text-foreground hover:bg-[var(--surface)]")} onClick={() => setMode(m)}>
-            {m.charAt(0).toUpperCase() + m.slice(1)}
+      {!gradingFocusMode && (
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex gap-1 bg-[var(--surface-hover)] border border-border rounded-lg p-1 w-fit">
+            {(
+              ["grading", "dashboard", "compare", "traces", "config"] as Mode[]
+            ).map((m) => (
+              <button
+                key={m}
+                className={cn(
+                  "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  mode === m
+                    ? "bg-[var(--surface-hover)] text-foreground"
+                    : "text-muted hover:text-foreground hover:bg-[var(--surface)]",
+                )}
+                onClick={() => {
+                  setMode(m);
+                  if (m !== "grading") setIsGradingFocused(false);
+                }}
+              >
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
+          {mode === "grading" && (
+            <button
+              className="btn-subtle btn-subtle-primary"
+              onClick={() => setIsGradingFocused(true)}
+            >
+              Enter Focus
+            </button>
+          )}
+        </div>
+      )}
+
+      {gradingFocusMode && (
+        <div className="flex justify-end mb-2">
+          <button
+            className="btn-subtle"
+            onClick={() => setIsGradingFocused(false)}
+          >
+            Exit Focus
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
-      {mode === "grading" && (
-        <>
-          <GradingView runIds={runIds} compare />
-          <ExportBar runIds={runIds} />
-        </>
-      )}
-      {mode === "dashboard" && (
-        <>
-          <CompareDashboard runIds={runIds} />
-          <ExportBar runIds={runIds} />
-        </>
-      )}
+      {mode === "grading" && <GradingView runIds={runIds} compare />}
+      {mode === "dashboard" && <CompareDashboard runIds={runIds} />}
       {mode === "compare" && (
         <>
           {analyticsLoading ? (
-            <div className="text-center py-8 text-muted">Loading comparison matrix...</div>
+            <div className="text-center py-8 text-muted">
+              Loading comparison matrix...
+            </div>
           ) : (
-            <QueryComparisonMatrix runs={compareAnalytics?.runs || []} queryGrades={compareAnalytics?.query_grades || []} />
+            <QueryComparisonMatrix
+              runs={compareAnalytics?.runs || []}
+              queryGrades={compareAnalytics?.query_grades || []}
+            />
           )}
-          <ExportBar runIds={runIds} />
+          <TraceComparisonCard runIds={runIds} />
         </>
       )}
-      {mode === "traces" && <TracesTab runIds={runIds} />}
+      {mode === "traces" && (
+        <div className="bg-card rounded-lg border border-border p-8 text-center text-sm text-muted">
+          Trace comparison has been moved to the Compare tab (below Query
+          Comparison Matrix).
+        </div>
+      )}
       {mode === "config" && <ConfigView runIds={runIds} />}
     </>
   );
@@ -111,7 +163,7 @@ interface GradingData {
   versionsByBaseResult: Record<number, ResultOut[]>;
 }
 
-function TracesTab({ runIds }: { runIds: number[] }) {
+function TraceComparisonCard({ runIds }: { runIds: number[] }) {
   const qKey = ["grading", runIds.join(",")];
   const { data, isLoading } = useQuery<GradingData>({
     queryKey: qKey,
@@ -119,32 +171,44 @@ function TracesTab({ runIds }: { runIds: number[] }) {
       const fetchedRuns: RunDetailOut[] = [];
       const fetchedResults: Record<number, ResultOut[]> = {};
       const fetchedVersions: Record<number, ResultOut[]> = {};
-      await Promise.all(runIds.map(async (id) => {
-        const [run, res] = await Promise.all([runsApi.get(id), resultsApi.listFamilies(id)]);
-        fetchedRuns.push(run);
-        fetchedResults[id] = res.results;
-        Object.assign(fetchedVersions, res.versions_by_base_result);
-      }));
+      await Promise.all(
+        runIds.map(async (id) => {
+          const [run, res] = await Promise.all([
+            runsApi.get(id),
+            resultsApi.listFamilies(id),
+          ]);
+          fetchedRuns.push(run);
+          fetchedResults[id] = res.results;
+          Object.assign(fetchedVersions, res.versions_by_base_result);
+        }),
+      );
       const runMap = Object.fromEntries(fetchedRuns.map((r) => [r.id, r]));
       const orderedRuns = runIds.map((id) => runMap[id]).filter(Boolean);
-      return { runs: orderedRuns, results: fetchedResults, versionsByBaseResult: fetchedVersions };
+      return {
+        runs: orderedRuns,
+        results: fetchedResults,
+        versionsByBaseResult: fetchedVersions,
+      };
     },
     staleTime: 30_000,
   });
 
   const runs = data?.runs ?? [];
-  const results = data?.results ?? {};
+  const results = data?.results;
 
   // Build allResults: queryId → runId → ResultOut
   const { allResults, queryIds } = useMemo(() => {
     const all: Record<number, Record<number, ResultOut>> = {};
+    const scopedResults = results ?? {};
     for (const rid of runIds) {
-      (results[rid] || []).forEach((r) => {
+      (scopedResults[rid] || []).forEach((r) => {
         if (!all[r.query_id]) all[r.query_id] = {};
         all[r.query_id][rid] = r;
       });
     }
-    const qids = Object.keys(all).map(Number).sort((a, b) => a - b);
+    const qids = Object.keys(all)
+      .map(Number)
+      .sort((a, b) => a - b);
     return { allResults: all, queryIds: qids };
   }, [runIds, results]);
 
@@ -157,7 +221,9 @@ function TracesTab({ runIds }: { runIds: number[] }) {
   }
 
   if (queryIds.length === 0) {
-    return <div className="text-center py-8 text-muted">No results available.</div>;
+    return (
+      <div className="text-center py-8 text-muted">No results available.</div>
+    );
   }
 
   const activeQueryId = queryIds[selectedQueryIdx] ?? queryIds[0];
@@ -174,10 +240,15 @@ function TracesTab({ runIds }: { runIds: number[] }) {
   }
 
   return (
-    <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col" style={{ height: "70vh" }}>
+    <div
+      className="bg-card rounded-lg border border-border flex flex-col mb-6"
+      style={{ height: "70vh" }}
+    >
       {/* Controls bar */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0 flex-wrap">
-        <label className="text-sm font-semibold text-muted shrink-0">Query:</label>
+        <label className="text-sm font-medium text-muted shrink-0">
+          Query:
+        </label>
         <select
           className="px-2 py-1 border border-border rounded-md text-sm bg-card text-foreground outline-none focus:border-brand"
           value={selectedQueryIdx}
@@ -188,17 +259,31 @@ function TracesTab({ runIds }: { runIds: number[] }) {
             const label = firstResult?.query?.query_text
               ? `#${firstResult.query.ordinal}: ${firstResult.query.query_text.slice(0, 60)}${firstResult.query.query_text.length > 60 ? "..." : ""}`
               : `Query ${qid}`;
-            return <option key={qid} value={i}>{label}</option>;
+            return (
+              <option key={qid} value={i}>
+                {label}
+              </option>
+            );
           })}
         </select>
         {runs.length > 2 && (
           <>
             <div className="w-40">
-              <AgentDropdown runs={runs} resultsByRun={resultsByRun} selectedIdx={leftIdx} onChange={setLeftIdx} />
+              <AgentDropdown
+                runs={runs}
+                resultsByRun={resultsByRun}
+                selectedIdx={leftIdx}
+                onChange={setLeftIdx}
+              />
             </div>
             <span className="text-muted text-sm">vs</span>
             <div className="w-40">
-              <AgentDropdown runs={runs} resultsByRun={resultsByRun} selectedIdx={rightIdx} onChange={setRightIdx} />
+              <AgentDropdown
+                runs={runs}
+                resultsByRun={resultsByRun}
+                selectedIdx={rightIdx}
+                onChange={setRightIdx}
+              />
             </div>
           </>
         )}
@@ -217,16 +302,6 @@ function TracesTab({ runIds }: { runIds: number[] }) {
         }}
         queryLabel={`Query #${allResults[activeQueryId] ? (Object.values(allResults[activeQueryId])[0]?.query?.ordinal ?? activeQueryId) : activeQueryId}`}
       />
-    </div>
-  );
-}
-
-function ExportBar({ runIds }: { runIds: number[] }) {
-  return (
-    <div className="flex gap-2 mt-6 pt-4 border-t border-border">
-      <a href={exportApi.htmlUrl(runIds)} target="_blank" className="px-4 py-2 bg-card border border-border rounded-lg font-semibold text-sm hover:bg-[var(--surface-hover)] no-underline text-foreground transition-colors">Share as HTML</a>
-      <a href={exportApi.csvUrl(runIds)} className="px-4 py-2 bg-card border border-border rounded-lg font-semibold text-sm hover:bg-[var(--surface-hover)] no-underline text-foreground transition-colors">Export CSV</a>
-      <a href={exportApi.jsonUrl(runIds)} className="px-4 py-2 bg-card border border-border rounded-lg font-semibold text-sm hover:bg-[var(--surface-hover)] no-underline text-foreground transition-colors">Export JSON</a>
     </div>
   );
 }

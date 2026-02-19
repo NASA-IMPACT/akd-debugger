@@ -8,24 +8,32 @@ from models.query import Query
 from models.result import Result
 from models.run import Run
 from services.analytics import compute_compare_analytics, compute_run_analytics
+from services.context import get_request_context
+from services.tenancy import apply_workspace_filter
 
 
 async def generate_export_html(run_ids: list[int], db: AsyncSession) -> str:
     """Generate a self-contained HTML dashboard for sharing."""
+    ctx = get_request_context()
     runs_data = []
 
     for rid in run_ids:
-        run = await db.get(Run, rid)
+        run_stmt = apply_workspace_filter(select(Run).where(Run.id == rid), Run, ctx)
+        run = (await db.execute(run_stmt)).scalar_one_or_none()
         if not run:
             continue
 
         results = (
             (
                 await db.execute(
-                    select(Result)
-                    .where(Result.run_id == rid)
-                    .options(selectinload(Result.grade), selectinload(Result.query))
-                    .order_by(Result.query_id)
+                    apply_workspace_filter(
+                        select(Result)
+                        .where(Result.run_id == rid)
+                        .options(selectinload(Result.grade), selectinload(Result.query))
+                        .order_by(Result.query_id),
+                        Result,
+                        ctx,
+                    )
                 )
             )
             .scalars()

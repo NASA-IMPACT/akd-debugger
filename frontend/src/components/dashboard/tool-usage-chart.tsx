@@ -34,7 +34,7 @@ export function ToolUsageChart({ toolUsage }: Props) {
   const sorted = entries.sort((a, b) => b[1] - a[1]);
 
   return (
-    <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+    <div className="bg-card rounded-lg p-6 px-8 mb-6">
       <h2 className="text-lg font-semibold mb-4 pb-2 border-b-2 border-border text-brand-dark">Tool Usage</h2>
       {sorted.map(([name, count]) => {
         const w = Math.max(20, Math.round((count / maxVal) * 300));

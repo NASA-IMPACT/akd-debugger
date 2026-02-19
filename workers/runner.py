@@ -22,7 +22,15 @@ _run_semaphore = asyncio.Semaphore(3)
 
 
 async def _create_run_notification(
-    db, *, run_id: int, label: str | None, status: str, error_message: str | None = None
+    db,
+    *,
+    organization_id: int,
+    project_id: int | None,
+    user_id: int | None,
+    run_id: int,
+    label: str | None,
+    status: str,
+    error_message: str | None = None,
 ):
     run_label = label or f"Run #{run_id}"
     if status == "completed":
@@ -41,6 +49,9 @@ async def _create_run_notification(
 
     db.add(
         AppNotification(
+            organization_id=organization_id,
+            project_id=project_id,
+            user_id=user_id,
             notif_type=notif_type,
             title=title,
             message=message,
@@ -68,6 +79,9 @@ async def execute_run(run_id: int, query_ids: list[int], batch_size: int):
                     run.completed_at = datetime.now(timezone.utc)
                     await _create_run_notification(
                         db,
+                        organization_id=run.organization_id,
+                        project_id=run.project_id,
+                        user_id=run.created_by_user_id,
                         run_id=run.id,
                         label=run.label,
                         status="failed",
@@ -110,6 +124,9 @@ async def _execute_run_inner(run_id: int, query_ids: list[int], batch_size: int)
             run.completed_at = datetime.now(timezone.utc)
             await _create_run_notification(
                 db,
+                organization_id=run.organization_id,
+                project_id=run.project_id,
+                user_id=run.created_by_user_id,
                 run_id=run.id,
                 label=run.label,
                 status="failed",
@@ -139,7 +156,13 @@ async def _execute_run_inner(run_id: int, query_ids: list[int], batch_size: int)
             await db.refresh(run)
             if run.status == "cancelled":
                 await _create_run_notification(
-                    db, run_id=run.id, label=run.label, status="cancelled"
+                    db,
+                    organization_id=run.organization_id,
+                    project_id=run.project_id,
+                    user_id=run.created_by_user_id,
+                    run_id=run.id,
+                    label=run.label,
+                    status="cancelled",
                 )
                 await db.commit()
                 await sse_bus.publish(run_id, "complete", {"status": "cancelled"})
@@ -148,7 +171,15 @@ async def _execute_run_inner(run_id: int, query_ids: list[int], batch_size: int)
             batch = queries[i : i + batch_size]
             tasks = [
                 _execute_single(
-                    executor, q, exec_config, run_id, run.agent_config_id, db
+                    executor,
+                    q,
+                    exec_config,
+                    run_id,
+                    run.agent_config_id,
+                    run.organization_id,
+                    run.project_id,
+                    run.created_by_user_id,
+                    db,
                 )
                 for q in batch
             ]
@@ -157,6 +188,10 @@ async def _execute_run_inner(run_id: int, query_ids: list[int], batch_size: int)
             for q, res in zip(batch, results):
                 if isinstance(res, Exception):
                     result = Result(
+                        organization_id=run.organization_id,
+                        project_id=run.project_id,
+                        created_by_user_id=run.created_by_user_id,
+                        visibility_scope=run.visibility_scope,
                         run_id=run_id,
                         query_id=q.id,
                         error=str(res),
@@ -201,7 +236,13 @@ async def _execute_run_inner(run_id: int, query_ids: list[int], batch_size: int)
             run.status = "completed"
             run.completed_at = datetime.now(timezone.utc)
             await _create_run_notification(
-                db, run_id=run.id, label=run.label, status="completed"
+                db,
+                organization_id=run.organization_id,
+                project_id=run.project_id,
+                user_id=run.created_by_user_id,
+                run_id=run.id,
+                label=run.label,
+                status="completed",
             )
             await db.commit()
 
@@ -237,10 +278,21 @@ def _save_result_json(filepath: Path, query: Query, result: Result):
 
 
 async def _execute_single(
-    executor, query: Query, config: dict, run_id: int, agent_config_id: int, db
+    executor,
+    query: Query,
+    config: dict,
+    run_id: int,
+    agent_config_id: int,
+    organization_id: int,
+    project_id: int,
+    created_by_user_id: int | None,
+    db,
 ) -> Result:
     started_at = datetime.now(timezone.utc)
     trace = TraceLog(
+        organization_id=organization_id,
+        project_id=project_id,
+        created_by_user_id=created_by_user_id,
         run_id=run_id,
         query_id=query.id,
         agent_config_id=agent_config_id,
@@ -277,6 +329,10 @@ async def _execute_single(
     trace.latency_ms = latency_ms
 
     return Result(
+        organization_id=organization_id,
+        project_id=project_id,
+        created_by_user_id=created_by_user_id,
+        visibility_scope="project",
         run_id=run_id,
         query_id=query.id,
         trace_log_id=trace.id,
