@@ -60,13 +60,90 @@ def _parse_positive_int(header_name: str, raw: str | None) -> int:
     return int(raw)
 
 
+def _request_arg(
+    request: Request,
+    *,
+    keys: tuple[str, ...],
+) -> str | None:
+    for key in keys:
+        raw = request.query_params.get(key)
+        if raw is None:
+            continue
+        raw = raw.strip()
+        if raw:
+            return raw
+    return None
+
+
+def _allow_workspace_default(request: Request) -> bool:
+    return request.method.upper() in {"GET", "HEAD", "OPTIONS"}
+
+
+async def _resolve_default_org_id(
+    db: AsyncSession,
+    user_id: int,
+) -> int | None:
+    stmt = (
+        select(OrganizationMembership.organization_id)
+        .where(
+            OrganizationMembership.user_id == user_id,
+            OrganizationMembership.is_active.is_(True),
+        )
+        .order_by(OrganizationMembership.organization_id.asc())
+        .limit(1)
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
+async def _resolve_default_project_id(
+    db: AsyncSession,
+    *,
+    organization_id: int,
+    user_id: int,
+    is_org_admin: bool,
+) -> int | None:
+    member_stmt = (
+        select(ProjectMembership.project_id)
+        .where(
+            ProjectMembership.organization_id == organization_id,
+            ProjectMembership.user_id == user_id,
+            ProjectMembership.is_active.is_(True),
+        )
+        .order_by(ProjectMembership.project_id.asc())
+        .limit(1)
+    )
+    member_project_id = (await db.execute(member_stmt)).scalar_one_or_none()
+    if member_project_id is not None:
+        return member_project_id
+
+    if not is_org_admin:
+        return None
+
+    org_project_stmt = (
+        select(Project.id)
+        .where(Project.organization_id == organization_id)
+        .order_by(Project.id.asc())
+        .limit(1)
+    )
+    return (await db.execute(org_project_stmt)).scalar_one_or_none()
+
+
 async def require_org_context(
     request: Request,
     x_org_id: str | None = Header(default=None, alias="X-Org-Id"),
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    org_id = _parse_positive_int("X-Org-Id", x_org_id)
+    raw_org_id = x_org_id or _request_arg(
+        request,
+        keys=("org_id", "organization_id"),
+    )
+    if raw_org_id is None and _allow_workspace_default(request):
+        default_org_id = await _resolve_default_org_id(db, user.id)
+        if default_org_id is not None:
+            raw_org_id = str(default_org_id)
+
+    org_id = _parse_positive_int("X-Org-Id", raw_org_id)
     stmt = select(OrganizationMembership).where(
         OrganizationMembership.organization_id == org_id,
         OrganizationMembership.user_id == user.id,
@@ -104,7 +181,21 @@ async def require_project_context(
     org_ctx: WorkspaceContext = Depends(require_org_context),
     db: AsyncSession = Depends(get_db),
 ):
-    project_id = _parse_positive_int("X-Project-Id", x_project_id)
+    raw_project_id = x_project_id or _request_arg(
+        request,
+        keys=("project_id",),
+    )
+    if raw_project_id is None and _allow_workspace_default(request):
+        default_project_id = await _resolve_default_project_id(
+            db,
+            organization_id=org_ctx.organization_id,
+            user_id=org_ctx.user.id,
+            is_org_admin=org_ctx.is_org_admin,
+        )
+        if default_project_id is not None:
+            raw_project_id = str(default_project_id)
+
+    project_id = _parse_positive_int("X-Project-Id", raw_project_id)
 
     project = await db.get(Project, project_id)
     if not project or project.organization_id != org_ctx.organization_id:

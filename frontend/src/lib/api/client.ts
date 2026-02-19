@@ -105,6 +105,16 @@ export function apiUrl(path: string): string {
   return `${API_BASE}${path}`;
 }
 
+export function apiUrlWithWorkspace(path: string): string {
+  const [pathname, rawQuery = ""] = path.split("?");
+  const query = new URLSearchParams(rawQuery);
+  const { organizationId: orgId, projectId } = getActiveWorkspace();
+  if (orgId && !query.has("org_id")) query.set("org_id", orgId);
+  if (projectId && !query.has("project_id")) query.set("project_id", projectId);
+  const queryString = query.toString();
+  return `${API_BASE}${pathname}${queryString ? `?${queryString}` : ""}`;
+}
+
 export async function apiUpload<T>(path: string, formData: FormData): Promise<T> {
   const res = await fetchWithSessionRecovery(
     path,

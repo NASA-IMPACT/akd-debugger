@@ -657,21 +657,8 @@ function FloatingGradeBar({
   activeQueryId: number | null;
   onNavigate: (queryId: number) => void;
 }) {
-  const sentinelRef = useRef<HTMLDivElement>(null);
   const navScrollRef = useRef<HTMLDivElement>(null);
   const activeNavRef = useRef<HTMLButtonElement>(null);
-  const [pinned, setPinned] = useState(false);
-
-  useEffect(() => {
-    const sentinel = sentinelRef.current;
-    if (!sentinel) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setPinned(!entry.isIntersecting),
-      { threshold: 0, rootMargin: "-56px 0px 0px 0px" },
-    );
-    observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, []);
 
   // Auto-scroll active nav item into view
   useEffect(() => {
@@ -694,17 +681,15 @@ function FloatingGradeBar({
 
   return (
     <>
-      <div ref={sentinelRef} className="h-0 w-full" />
       <div
         className={cn(
-          "z-40 flex justify-center mb-4 transition-all duration-300 ease-out",
-          pinned ? "fixed bottom-4 left-1/2 -translate-x-1/2 w-full px-4" : "",
+          "sticky top-14 z-40 flex justify-center mb-4",
         )}
       >
         <div
           className={cn(
             "glass-opaque rounded-2xl overflow-hidden flex flex-col w-full max-w-3xl",
-            pinned ? "shadow-xl" : "shadow-md",
+            "shadow-md",
           )}
         >
           {/* Single row: scrollable query pills | fixed stats */}

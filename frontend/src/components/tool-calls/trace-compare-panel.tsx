@@ -11,7 +11,6 @@ import {
 import { JsonSection } from "@/components/json/json-section";
 import { MarkdownRenderer } from "@/components/markdown/markdown-renderer";
 import { cn } from "@/lib/utils";
-import { Search } from "lucide-react";
 
 interface SideData {
   label: string;
@@ -338,10 +337,9 @@ export function TraceComparePanel({
           </button>
         </div>
         <div className="relative flex-1 min-w-[180px] max-w-sm ml-auto">
-          <Search size={14} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-muted" />
           <input
             type="text"
-            className="w-full pl-10 pr-2 py-1.5 border border-border rounded-md text-sm outline-none bg-card text-foreground focus:border-brand focus:ring-2 focus:ring-brand/15"
+            className="w-full px-2 py-1.5 border border-border rounded-md text-sm outline-none bg-card text-foreground focus:border-brand focus:ring-2 focus:ring-brand/15"
             placeholder="Search traces..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}

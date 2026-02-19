@@ -24,6 +24,8 @@ export default function CompareDetailPage() {
   const params = useParams();
   const comparisonId = Number(params.id);
   const [mode, setMode] = useState<Mode>("grading");
+  const [isGradingFocused, setIsGradingFocused] = useState(false);
+  const gradingFocusMode = mode === "grading" && isGradingFocused;
 
   const {
     data: comparison,
@@ -71,33 +73,61 @@ export default function CompareDetailPage() {
 
   return (
     <>
-      <PageHeader
-        title={comparison.name || `Comparison #${comparison.id}`}
-        subtitle={
-          <div className="text-sm text-muted mt-1">
-            Dataset: {comparison.suite_name} &bull; {comparison.run_count} runs
-          </div>
-        }
-      />
+      {!gradingFocusMode && (
+        <PageHeader
+          title={comparison.name || `Comparison #${comparison.id}`}
+          subtitle={
+            <div className="text-sm text-muted mt-1">
+              Dataset: {comparison.suite_name} &bull; {comparison.run_count} runs
+            </div>
+          }
+        />
+      )}
 
-      <div className="flex gap-1 mb-4 bg-[var(--surface-hover)] border border-border rounded-lg p-1 w-fit">
-        {(
-          ["grading", "dashboard", "compare", "traces", "config"] as Mode[]
-        ).map((m) => (
+      {!gradingFocusMode && (
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div className="flex gap-1 bg-[var(--surface-hover)] border border-border rounded-lg p-1 w-fit">
+            {(
+              ["grading", "dashboard", "compare", "traces", "config"] as Mode[]
+            ).map((m) => (
+              <button
+                key={m}
+                className={cn(
+                  "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
+                  mode === m
+                    ? "bg-[var(--surface-hover)] text-foreground"
+                    : "text-muted hover:text-foreground hover:bg-[var(--surface)]",
+                )}
+                onClick={() => {
+                  setMode(m);
+                  if (m !== "grading") setIsGradingFocused(false);
+                }}
+              >
+                {m.charAt(0).toUpperCase() + m.slice(1)}
+              </button>
+            ))}
+          </div>
+          {mode === "grading" && (
+            <button
+              className="btn-subtle btn-subtle-primary"
+              onClick={() => setIsGradingFocused(true)}
+            >
+              Enter Focus
+            </button>
+          )}
+        </div>
+      )}
+
+      {gradingFocusMode && (
+        <div className="flex justify-end mb-2">
           <button
-            key={m}
-            className={cn(
-              "px-4 py-1.5 rounded-md text-sm font-medium transition-colors",
-              mode === m
-                ? "bg-[var(--surface-hover)] text-foreground"
-                : "text-muted hover:text-foreground hover:bg-[var(--surface)]",
-            )}
-            onClick={() => setMode(m)}
+            className="btn-subtle"
+            onClick={() => setIsGradingFocused(false)}
           >
-            {m.charAt(0).toUpperCase() + m.slice(1)}
+            Exit Focus
           </button>
-        ))}
-      </div>
+        </div>
+      )}
 
       {mode === "grading" && <GradingView runIds={runIds} compare />}
       {mode === "dashboard" && <CompareDashboard runIds={runIds} />}
