@@ -5,13 +5,16 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from starlette.responses import StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
 from executors.registry import get_executor
 from models.agent import AgentConfig
+from models.project import Project
+from models.project_membership import ProjectMembership
 from models.trace_log import TraceLog
+from models.user_permission_grant import UserPermissionGrant
 from schemas.schemas import (
     AgentChatRequest,
     AgentChatResponse,
@@ -23,6 +26,11 @@ from schemas.schemas import (
 from services.openai_pricing import calculate_cost
 from services.trace_utils import trace_to_out
 from services.db_utils import get_or_404
+from services.context import WorkspaceContext, get_request_context
+from services.error_format import format_exception_details
+from services.openai_tools import build_openai_tools
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter, assign_workspace_fields
 
 router = APIRouter()
 
@@ -195,6 +203,59 @@ def _usage_to_dict(usage) -> dict | None:
         return None
 
 
+def _utcnow() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+async def _resolve_project_import_context(
+    db: AsyncSession,
+    ctx: WorkspaceContext,
+    source_project_id: int,
+) -> WorkspaceContext:
+    project = await db.get(Project, source_project_id)
+    if not project or project.organization_id != ctx.organization_id:
+        raise HTTPException(404, "Source project not found in organization")
+
+    membership = (
+        await db.execute(
+            select(ProjectMembership).where(
+                ProjectMembership.organization_id == ctx.organization_id,
+                ProjectMembership.project_id == source_project_id,
+                ProjectMembership.user_id == ctx.user.id,
+                ProjectMembership.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+
+    if not membership and not ctx.is_org_admin:
+        grant_stmt = select(UserPermissionGrant.id).where(
+            UserPermissionGrant.organization_id == ctx.organization_id,
+            UserPermissionGrant.user_id == ctx.user.id,
+            or_(
+                UserPermissionGrant.project_id.is_(None),
+                UserPermissionGrant.project_id == source_project_id,
+            ),
+            or_(
+                UserPermissionGrant.expires_at.is_(None),
+                UserPermissionGrant.expires_at > _utcnow(),
+            ),
+        )
+        has_any_grant = (
+            await db.execute(grant_stmt.limit(1))
+        ).scalar_one_or_none() is not None
+        if not has_any_grant:
+            raise HTTPException(403, "You are not a member of the source project")
+
+    return WorkspaceContext(
+        user=ctx.user,
+        organization_id=ctx.organization_id,
+        project_id=source_project_id,
+        organization_membership=ctx.organization_membership,
+        project_membership=membership,
+        is_org_admin=ctx.is_org_admin,
+    )
+
+
 @router.post("/parse-code")
 async def parse_code(body: ParseCodeRequest):
     try:
@@ -206,7 +267,31 @@ async def parse_code(body: ParseCodeRequest):
 
 @router.get("", response_model=list[AgentOut])
 async def list_agents(tag: str | None = None, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.read")
     stmt = select(AgentConfig)
+    stmt = apply_workspace_filter(stmt, AgentConfig, ctx)
+    if tag:
+        stmt = stmt.where(AgentConfig.tags.overlap([tag]))
+    stmt = stmt.order_by(AgentConfig.created_at.desc())
+    result = await db.execute(stmt)
+    return [AgentOut.model_validate(a) for a in result.scalars().all()]
+
+
+@router.get("/importable", response_model=list[AgentOut])
+async def list_importable_agents(
+    source_project_id: int,
+    tag: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    ctx = get_request_context()
+    source_ctx = await _resolve_project_import_context(db, ctx, source_project_id)
+    await require_permission(db, source_ctx, "agents.read")
+
+    stmt = select(AgentConfig).where(
+        AgentConfig.organization_id == ctx.organization_id,
+        AgentConfig.project_id == source_project_id,
+    )
     if tag:
         stmt = stmt.where(AgentConfig.tags.overlap([tag]))
     stmt = stmt.order_by(AgentConfig.created_at.desc())
@@ -216,7 +301,10 @@ async def list_agents(tag: str | None = None, db: AsyncSession = Depends(get_db)
 
 @router.post("", response_model=AgentOut, status_code=201)
 async def create_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.write")
     agent = AgentConfig(**body.model_dump())
+    assign_workspace_fields(agent, ctx)
     db.add(agent)
     await db.commit()
     await db.refresh(agent)
@@ -227,6 +315,8 @@ async def create_agent(body: AgentCreate, db: AsyncSession = Depends(get_db)):
 async def chat_with_agent(
     agent_id: int, body: AgentChatRequest, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.read")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     if not body.messages:
         raise HTTPException(400, "messages cannot be empty")
@@ -241,9 +331,13 @@ async def chat_with_agent(
 
     started_at = datetime.now(timezone.utc)
     trace = TraceLog(
+        organization_id=ctx.organization_id,
+        project_id=ctx.project_id,
+        created_by_user_id=ctx.user.id,
         run_id=None,
         query_id=None,
         agent_config_id=agent.id,
+        conversation_id=body.conversation_id,
         trace_type="chat",
         provider="openai",
         endpoint="agents.chat.run",
@@ -298,6 +392,8 @@ async def chat_with_agent(
 async def chat_with_agent_stream(
     agent_id: int, body: AgentChatRequest, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.read")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     if not body.messages:
         raise HTTPException(400, "messages cannot be empty")
@@ -306,44 +402,16 @@ async def chat_with_agent_stream(
 
     from agents import (
         Agent,
-        HostedMCPTool,
         ModelSettings,
         RunConfig,
         Runner,
-        WebSearchTool,
     )
     from openai.types.shared.reasoning import Reasoning
 
-    tools = []
-    tc_raw = agent.tools_config
-    tc_list: list[dict] = []
-    if isinstance(tc_raw, list):
-        tc_list = tc_raw
-    elif isinstance(tc_raw, dict):
-        tc_list = [tc_raw]
-    for tc in tc_list:
-        if not isinstance(tc, dict):
-            continue
-        tool_type = tc.get("type")
-        if tool_type == "mcp":
-            tools.append(
-                HostedMCPTool(
-                    tool_config={
-                        "type": "mcp",
-                        "server_label": tc.get("server_label", "MCP Server"),
-                        "allowed_tools": tc.get("allowed_tools", []),
-                        "require_approval": "never",
-                        "server_url": tc.get("server_url", ""),
-                    }
-                )
-            )
-        elif tool_type == "web_search":
-            ws_kwargs: dict = {}
-            if tc.get("user_location"):
-                ws_kwargs["user_location"] = tc["user_location"]
-            if tc.get("search_context_size"):
-                ws_kwargs["search_context_size"] = tc["search_context_size"]
-            tools.append(WebSearchTool(**ws_kwargs))
+    try:
+        tools = build_openai_tools(agent.tools_config)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
     ms_raw = agent.model_settings or {}
     ms_kwargs = {}
@@ -379,9 +447,13 @@ async def chat_with_agent_stream(
 
     started_at = datetime.now(timezone.utc)
     trace = TraceLog(
+        organization_id=ctx.organization_id,
+        project_id=ctx.project_id,
+        created_by_user_id=ctx.user.id,
         run_id=None,
         query_id=None,
         agent_config_id=agent.id,
+        conversation_id=body.conversation_id,
         trace_type="chat",
         provider="openai",
         endpoint="agents.chat.stream",
@@ -520,16 +592,25 @@ async def chat_with_agent_stream(
             trace.completed_at = completed_at
             trace.latency_ms = int((completed_at - started_at).total_seconds() * 1000)
             trace.status = "failed"
-            trace.error = str(exc)
+            formatted_error = format_exception_details(exc)
+            trace.error = formatted_error
             trace.response_payload = {
                 "response": full_text,
                 "tool_calls": tool_calls,
                 "reasoning": [{"summary": ["".join(reasoning_chunks)]}] if reasoning_chunks else [],
             }
             await db.commit()
-            yield f"event: error\ndata: {json.dumps({'error': str(exc), 'trace_log_id': trace.id})}\n\n"
+            yield f"event: error\ndata: {json.dumps({'error': formatted_error, 'trace_log_id': trace.id})}\n\n"
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamingResponse(
+        event_stream(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 @router.get("/{agent_id}/traces", response_model=list[TraceLogOut])
@@ -538,18 +619,24 @@ async def list_agent_traces(
     status: str | None = None,
     trace_type: str | None = None,
     run_id: int | None = None,
+    conversation_id: str | None = None,
     limit: int = 200,
     db: AsyncSession = Depends(get_db),
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "traces.read")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     q = min(max(limit, 1), 1000)
     stmt = select(TraceLog).where(TraceLog.agent_config_id == agent_id)
+    stmt = apply_workspace_filter(stmt, TraceLog, ctx)
     if status:
         stmt = stmt.where(TraceLog.status == status)
     if trace_type:
         stmt = stmt.where(TraceLog.trace_type == trace_type)
     if run_id is not None:
         stmt = stmt.where(TraceLog.run_id == run_id)
+    if conversation_id:
+        stmt = stmt.where(TraceLog.conversation_id == conversation_id)
     stmt = stmt.order_by(TraceLog.created_at.desc()).limit(q)
     rows = (await db.execute(stmt)).scalars().all()
     return [trace_to_out(trace) for trace in rows]
@@ -557,6 +644,8 @@ async def list_agent_traces(
 
 @router.get("/{agent_id}", response_model=AgentOut)
 async def get_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.read")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     return AgentOut.model_validate(agent)
 
@@ -565,6 +654,8 @@ async def get_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
 async def update_agent(
     agent_id: int, body: AgentUpdate, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.write")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(agent, k, v)
@@ -575,6 +666,8 @@ async def update_agent(
 
 @router.delete("/{agent_id}", status_code=204)
 async def delete_agent(agent_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "agents.delete")
     agent = await get_or_404(db, AgentConfig, agent_id, "Agent")
     await db.delete(agent)
     await db.commit()

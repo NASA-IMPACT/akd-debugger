@@ -19,11 +19,14 @@ export function ToolPills({ toolCalls, onClickTool }: Props) {
   if (!steps.length) return null;
 
   return (
-    <div className="text-sm text-muted mt-2 p-2 px-3 bg-card rounded-lg border border-border/60 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.06)] break-words">
+    <div className="text-xs text-muted mt-1.5 p-1.5 px-2.5 bg-card rounded-lg border border-border/60 shadow-[inset_0_0.5px_0_rgba(255,255,255,0.06)] break-words">
       {steps.map((step, i) => (
         <span
           key={i}
-          onClick={(e) => { e.stopPropagation(); onClickTool(i); }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onClickTool(i);
+          }}
           className={cn(
             "inline-block px-1.5 py-0.5 m-0.5 rounded text-xs font-semibold cursor-pointer transition-all hover:-translate-y-px hover:shadow-md",
             kindStyles[step.kind],

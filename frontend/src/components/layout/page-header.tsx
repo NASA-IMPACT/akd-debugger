@@ -1,28 +1,36 @@
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 interface Props {
   title: string;
+  titleAction?: ReactNode;
   backHref?: string;
   backLabel?: string;
   children?: ReactNode; // actions slot
   subtitle?: ReactNode;
 }
 
-export function PageHeader({ title, backHref, backLabel, children, subtitle }: Props) {
+export function PageHeader({ title, titleAction, backHref, backLabel, children, subtitle }: Props) {
   return (
-    <div className="flex justify-between items-start pb-6 mb-6 border-b border-border">
+    <div className="mb-3">
       <div>
         {backHref && (
-          <a href={backHref} className="inline-flex items-center gap-1.5 text-brand text-sm no-underline mb-1 hover:opacity-80 transition-opacity">
-            <ArrowLeft size={14} />
+          <Link
+            href={backHref}
+            className="inline-flex items-center gap-1.5 text-muted text-[13px] no-underline mb-1 hover:text-foreground transition-colors"
+          >
+            <ArrowLeft size={13} />
             {backLabel || "Back"}
-          </a>
+          </Link>
         )}
-        <h1 className="text-2xl font-bold tracking-tight text-foreground">{title}</h1>
+        <div className="flex items-center gap-1.5">
+          <h1 className="text-lg font-semibold tracking-tight text-foreground">{title}</h1>
+          {titleAction}
+        </div>
         {subtitle}
       </div>
-      {children && <div className="flex gap-2">{children}</div>}
+      {children && <div className="flex flex-wrap gap-2 mt-2.5">{children}</div>}
     </div>
   );
 }

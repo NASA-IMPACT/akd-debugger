@@ -15,7 +15,7 @@ export function AccuracyOverview({ gradeCounts: gc, runLabel, runId }: Props) {
   const [chartOpen, setChartOpen] = useState(false);
 
   return (
-    <div className="bg-card rounded-xl p-6 px-8 mb-6 shadow-sm">
+    <div className="bg-card rounded-lg p-6 px-8 mb-6">
       <div className="flex items-center justify-between mb-4 pb-2 border-b-2 border-border">
         <h2 className="text-lg font-semibold text-brand-dark">Accuracy Overview</h2>
         <button

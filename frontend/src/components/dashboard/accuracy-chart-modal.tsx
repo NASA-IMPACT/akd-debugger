@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { X, Download } from "lucide-react";
 import type { GradeCountsOut } from "@/lib/types";
-import { apiUrl } from "@/lib/api/client";
+import { apiUrlWithWorkspace } from "@/lib/api/client";
 
 // plotperfect constants
 const PALETTE = ["#2A79DB", "#DE8F05", "#029E73", "#D55E00", "#CC78BC", "#CA9161", "#FBAFE4", "#949494", "#ECE133", "#56B4E9"];
@@ -264,7 +264,7 @@ export function AccuracyChartModal({ open, onClose, runs, runIds }: Props) {
   if (!open) return null;
 
   const handleDownloadHD = () => {
-    const url = apiUrl(`/api/charts/accuracy?run_ids=${runIds.join(",")}`);
+    const url = apiUrlWithWorkspace(`/api/charts/accuracy?run_ids=${runIds.join(",")}`);
     window.open(url, "_blank");
   };
 

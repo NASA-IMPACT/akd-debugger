@@ -12,10 +12,18 @@ interface Props {
   initialIdx?: number;
   queryLabel?: string;
   runLabel?: string;
+  zIndex?: number;
   onClose: () => void;
 }
 
-export function ToolModal({ toolCalls, initialIdx = 0, queryLabel, runLabel, onClose }: Props) {
+export function ToolModal({
+  toolCalls,
+  initialIdx = 0,
+  queryLabel,
+  runLabel,
+  zIndex = 1000,
+  onClose,
+}: Props) {
   const [activeIdx, setActiveIdx] = useState(initialIdx);
   const [searchQuery, setSearchQuery] = useState("");
   const [fullscreen, setFullscreen] = useState<{ which: "args" | "resp" } | null>(null);
@@ -56,7 +64,11 @@ export function ToolModal({ toolCalls, initialIdx = 0, queryLabel, runLabel, onC
     const label = isWebSearch ? "Raw Data" : (fullscreen.which === "args" ? "Input (Arguments)" : "Output (Response)");
     const name = currentStep?.label || tc.name || "unknown";
     return (
-      <div className="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center" onClick={(e) => e.target === e.currentTarget && setFullscreen(null)}>
+      <div
+        className="fixed inset-0 bg-black/50 flex items-center justify-center"
+        style={{ zIndex }}
+        onClick={(e) => e.target === e.currentTarget && setFullscreen(null)}
+      >
         <FullscreenViewer
           data={data}
           title={`${name} — ${label}`}
@@ -69,7 +81,8 @@ export function ToolModal({ toolCalls, initialIdx = 0, queryLabel, runLabel, onC
 
   return (
     <div
-      className="fixed inset-0 bg-black/50 z-[1000] flex items-center justify-center"
+      className="fixed inset-0 bg-black/50 flex items-center justify-center"
+      style={{ zIndex }}
       onClick={(e) => e.target === e.currentTarget && onClose()}
     >
       <div className="bg-card rounded-xl w-[95%] max-w-[1200px] h-[85vh] flex flex-col shadow-2xl">

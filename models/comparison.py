@@ -4,6 +4,7 @@ from sqlalchemy import Column, DateTime, ForeignKey, Integer, String, Table, fun
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from database import Base
+from models.enums import VISIBILITY_PROJECT
 
 comparison_runs = Table(
     "comparison_runs",
@@ -24,6 +25,18 @@ class Comparison(Base):
     __tablename__ = "comparisons"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    visibility_scope: Mapped[str] = mapped_column(
+        String(20), nullable=False, server_default=VISIBILITY_PROJECT, index=True
+    )
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     suite_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("benchmark_suites.id"), nullable=False

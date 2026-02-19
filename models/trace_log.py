@@ -11,6 +11,15 @@ class TraceLog(Base):
     __tablename__ = "trace_logs"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    project_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     run_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("runs.id", ondelete="CASCADE"), nullable=True, index=True
     )
@@ -19,6 +28,9 @@ class TraceLog(Base):
     )
     agent_config_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("agent_configs.id"), nullable=True, index=True
+    )
+    conversation_id: Mapped[str | None] = mapped_column(
+        String(120), nullable=True, index=True
     )
     provider: Mapped[str] = mapped_column(
         String(50), nullable=False, server_default="openai"

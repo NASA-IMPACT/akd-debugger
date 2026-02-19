@@ -19,10 +19,10 @@ export function StatusBadge({ status, elapsed, className }: StatusBadgeProps) {
   const cfg = statusConfig[status] || statusConfig.pending;
   const Icon = cfg.icon;
   return (
-    <span className={cn("inline-flex items-center gap-1.5 text-sm font-medium", className)}>
-      <Icon size={15} className={cn(cfg.color, status === "running" && "animate-spin-slow")} />
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium bg-[var(--surface)]", className)}>
+      <Icon size={12} className={cn(cfg.color, status === "running" && "animate-spin-slow")} />
       <span className={cfg.color}>{cfg.label}</span>
-      {elapsed && <span className="text-muted-light text-xs ml-0.5">{elapsed}</span>}
+      {elapsed && <span className="text-muted-light text-[11px] ml-0.5">{elapsed}</span>}
     </span>
   );
 }

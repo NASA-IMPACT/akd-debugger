@@ -280,7 +280,7 @@ export default function NewRunPage() {
         <button
           type="button"
           onClick={() => copyExistingCostTable(preview)}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card hover:bg-[var(--surface-hover)] text-xs"
+          className="btn-subtle text-xs"
           title="Copy cost table (Markdown)"
           aria-label="Copy cost table"
         >
@@ -329,7 +329,7 @@ export default function NewRunPage() {
         <button
           type="button"
           onClick={() => copyExistingUsageTable(preview)}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-card hover:bg-[var(--surface-hover)] text-xs"
+          className="btn-subtle text-xs"
           title="Copy usage table (Markdown)"
           aria-label="Copy usage table"
         >
@@ -384,14 +384,14 @@ export default function NewRunPage() {
       <PageHeader title="Start New Benchmark Run" backHref="/" />
 
       <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_360px] gap-4 items-start">
-        <div className="bg-card rounded-xl border border-border p-6 shadow-sm">
+        <div className="bg-card rounded-lg border border-border p-6">
           <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block font-semibold text-sm text-muted mb-1">
               Dataset
             </label>
             <select
-              className="w-full px-3 py-2 border border-border bg-[var(--surface-hover)] rounded-lg text-sm text-foreground focus:border-brand outline-none"
+              className="w-full px-2.5 py-1.5 border border-border bg-[var(--surface-hover)] rounded-md text-[13px] text-foreground focus:border-brand outline-none"
               value={suiteId}
               onChange={(e) => setSuiteId(e.target.value)}
               required
@@ -410,7 +410,7 @@ export default function NewRunPage() {
               Agent
             </label>
             <select
-              className="w-full px-3 py-2 border border-border bg-[var(--surface-hover)] rounded-lg text-sm text-foreground focus:border-brand outline-none"
+              className="w-full px-2.5 py-1.5 border border-border bg-[var(--surface-hover)] rounded-md text-[13px] text-foreground focus:border-brand outline-none"
               value={agentId}
               onChange={(e) => setAgentId(e.target.value)}
               required
@@ -429,7 +429,7 @@ export default function NewRunPage() {
               Label
             </label>
             <input
-              className="w-full px-3 py-2 border border-border bg-[var(--surface-hover)] rounded-lg text-sm text-foreground focus:border-brand outline-none"
+              className="w-full px-2.5 py-1.5 border border-border bg-[var(--surface-hover)] rounded-md text-[13px] text-foreground focus:border-brand outline-none"
               value={label}
               onChange={(e) => setLabel(e.target.value)}
               required
@@ -442,7 +442,7 @@ export default function NewRunPage() {
               Tags (comma-separated)
             </label>
             <input
-              className="w-full px-3 py-2 border border-border bg-[var(--surface-hover)] rounded-lg text-sm text-foreground focus:border-brand outline-none"
+              className="w-full px-2.5 py-1.5 border border-border bg-[var(--surface-hover)] rounded-md text-[13px] text-foreground focus:border-brand outline-none"
               value={tags}
               onChange={(e) => setTags(e.target.value)}
               placeholder="e.g. astro-team, v1"
@@ -454,13 +454,13 @@ export default function NewRunPage() {
               Output Directory
             </label>
             <input
-              className="w-full px-3 py-2 border border-border bg-[var(--surface-hover)] rounded-lg text-sm text-foreground focus:border-brand outline-none"
+              className="w-full px-2.5 py-1.5 border border-border bg-[var(--surface-hover)] rounded-md text-[13px] text-foreground focus:border-brand outline-none"
               value={outputDir}
               onChange={(e) => setOutputDir(e.target.value)}
-              placeholder="~/axiom_data/<label>"
+              placeholder="~/akd_data/<label>"
             />
             <span className="text-xs text-muted-light">
-              Leave blank for default: ~/axiom_data/&lt;label&gt;
+              Leave blank for default: ~/akd_data/&lt;label&gt;
             </span>
           </div>
 
@@ -470,7 +470,7 @@ export default function NewRunPage() {
                 Batch Size
               </label>
               <select
-                className="w-full px-3 py-2 border border-border bg-[var(--surface-hover)] rounded-lg text-sm text-foreground focus:border-brand outline-none"
+                className="w-full px-2.5 py-1.5 border border-border bg-[var(--surface-hover)] rounded-md text-[13px] text-foreground focus:border-brand outline-none"
                 value={batchSize}
                 onChange={(e) => setBatchSize(e.target.value)}
               >
@@ -486,7 +486,7 @@ export default function NewRunPage() {
               </label>
               <input
                 type="number"
-                className="w-full px-3 py-2 border border-border bg-[var(--surface-hover)] rounded-lg text-sm text-foreground focus:border-brand outline-none"
+                className="w-full px-2.5 py-1.5 border border-border bg-[var(--surface-hover)] rounded-md text-[13px] text-foreground focus:border-brand outline-none"
                 value={repeat}
                 onChange={(e) => setRepeat(e.target.value)}
                 min={1}
@@ -528,14 +528,14 @@ export default function NewRunPage() {
                 <div className="flex flex-wrap items-center gap-2 mb-3 p-3 bg-[var(--surface-hover)] rounded-lg border border-border">
                   <button
                     type="button"
-                    className="px-3 py-1.5 bg-card border border-border rounded-md text-xs font-semibold hover:bg-[var(--surface-hover)]"
+                    className="btn-subtle text-xs font-semibold"
                     onClick={() => selectAll(true)}
                   >
                     Select All
                   </button>
                   <button
                     type="button"
-                    className="px-3 py-1.5 bg-card border border-border rounded-md text-xs font-semibold hover:bg-[var(--surface-hover)]"
+                    className="btn-subtle text-xs font-semibold"
                     onClick={() => selectAll(false)}
                   >
                     Deselect All
@@ -557,7 +557,7 @@ export default function NewRunPage() {
                       <button
                         key={m}
                         type="button"
-                        className={`px-3 py-1.5 text-xs font-semibold ${pickMode === m ? "bg-brand text-white" : "bg-card hover:bg-[var(--surface-hover)]"}`}
+                        className={`btn-subtle text-xs font-semibold ${pickMode === m ? "btn-subtle-primary" : ""}`}
                         onClick={() => handlePickMode(m)}
                       >
                         {m.charAt(0).toUpperCase() + m.slice(1)}
@@ -599,13 +599,13 @@ export default function NewRunPage() {
           <div className="flex gap-3 pt-4 border-t border-border">
             <Link
               href="/"
-              className="px-4 py-2 bg-[var(--surface-hover)] border border-border rounded-lg font-semibold text-sm hover:brightness-95 no-underline text-muted"
+              className="btn-subtle no-underline"
             >
               Cancel
             </Link>
             <button
               type="submit"
-              className="px-4 py-2 bg-brand text-white rounded-lg font-semibold text-sm hover:bg-brand-hover disabled:opacity-50"
+              className="btn-subtle btn-subtle-primary disabled:opacity-50"
               disabled={
                 createMutation.isPending ||
                 previewMutation.isPending ||
@@ -623,7 +623,7 @@ export default function NewRunPage() {
           </form>
         </div>
 
-        <aside className="bg-card rounded-xl border border-border p-4 shadow-sm xl:sticky xl:top-24">
+        <aside className="bg-card rounded-lg border border-border p-4 xl:sticky xl:top-24">
           <div className="flex items-center justify-between mb-2">
             <h3 className="text-sm font-semibold text-foreground">Existing Cost Preview</h3>
             <button
@@ -631,7 +631,7 @@ export default function NewRunPage() {
               onClick={() => setShowExistingFloating(true)}
               disabled={!existingCompletedPreview}
               title="Expand to floating view"
-              className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-border bg-card hover:bg-[var(--surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
+              className="btn-subtle h-7 w-7 p-0 disabled:cursor-not-allowed"
             >
               <Expand size={14} />
             </button>
@@ -673,7 +673,7 @@ export default function NewRunPage() {
                 <button
                   type="button"
                   onClick={() => setShowExistingDetails((v) => !v)}
-                  className="px-3 py-1.5 text-xs font-semibold rounded-md border border-border bg-card hover:bg-[var(--surface-hover)]"
+                  className="btn-subtle text-xs font-semibold"
                 >
                   {showExistingDetails ? "Minimize details" : "Show details"}
                 </button>
@@ -695,8 +695,8 @@ export default function NewRunPage() {
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center"
           onClick={(e) => e.target === e.currentTarget && setCostPreview(null)}
         >
-          <div className="bg-card border border-border rounded-xl w-[92%] max-w-[560px] p-6 shadow-2xl">
-            <h3 className="text-xl font-semibold mb-2">Cost Preview</h3>
+          <div className="bg-card border border-border rounded-lg w-[92%] max-w-[560px] p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold mb-2">Cost Preview</h3>
             <p className="text-sm text-muted mb-4">
               Sampled {costPreview.sample_size} random queries (ordinals:{" "}
               {costPreview.sampled_query_ordinals.join(", ")}) and estimated
@@ -754,13 +754,13 @@ export default function NewRunPage() {
             )}
             <div className="flex justify-end gap-3">
               <button
-                className="px-4 py-2 bg-card border border-border rounded-lg font-semibold text-sm"
+                className="btn-subtle"
                 onClick={() => setCostPreview(null)}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-brand text-white rounded-lg font-semibold text-sm disabled:opacity-50"
+                className="btn-subtle btn-subtle-primary disabled:opacity-50"
                 disabled={
                   costPreview.missing_model_pricing || approveMutation.isPending
                 }
@@ -777,8 +777,8 @@ export default function NewRunPage() {
 
       {(previewMutation.isPending || activePreviewId !== null) && !costPreview && (
         <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center">
-          <div className="bg-card border border-border rounded-xl w-[92%] max-w-[520px] p-6 shadow-2xl">
-            <h3 className="text-xl font-semibold mb-2">Running Cost Preview</h3>
+          <div className="bg-card border border-border rounded-lg w-[92%] max-w-[520px] p-6 shadow-2xl">
+            <h3 className="text-lg font-semibold mb-2">Running Cost Preview</h3>
             <p className="text-sm text-muted">
               Running up to 3 random sample queries in parallel to estimate your
               full run cost.
@@ -799,12 +799,12 @@ export default function NewRunPage() {
           className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4"
           onClick={(e) => e.target === e.currentTarget && setShowExistingFloating(false)}
         >
-          <div className="bg-card border border-border rounded-xl w-full max-w-3xl p-6 shadow-2xl max-h-[85vh] overflow-y-auto">
+          <div className="bg-card border border-border rounded-lg w-full max-w-3xl p-6 shadow-2xl max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-foreground">Cost + Usage Breakdown</h3>
               <button
                 type="button"
-                className="px-3 py-1.5 text-xs font-semibold rounded-md border border-border bg-[var(--surface-hover)] hover:brightness-95"
+                className="btn-subtle text-xs font-semibold"
                 onClick={() => setShowExistingFloating(false)}
               >
                 Close

@@ -1,0 +1,9 @@
+<svg width="239" height="56" viewBox="0 0 239 56" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <circle cx="25" cy="28" r="18" stroke="#1E40AF" stroke-width="3" opacity="0.28" />
+  <circle cx="39" cy="28" r="16.5" stroke="#1D4ED8" stroke-width="6" opacity="0.38" />
+  <path d="M76 28C76 38.4934 67.4934 47 57 47C46.5066 47 38 38.4934 38 28C38 17.5066 46.5066 9 57 9C67.4934 9 76 17.5066 76 28ZM43 28C43 37.3888 49.6112 42 57 42C64.3888 42 71 35.3888 71 28C71 20.6112 64.3888 14 57 14C49.6112 14 43 18.6112 43 28Z" fill="#1E40AF" opacity="0.82"/>
+  <path d="M92 28C92 38.4934 83.4934 47 73 47C62.5066 47 54 38.4934 54 28C54 17.5066 62.5066 9 73 9C83.4934 9 92 17.5066 92 28ZM63.5 28C63.5 33.2467 67.7533 37.5 73 37.5C78.2467 37.5 82.5 33.2467 82.5 28C82.5 22.7533 78.2467 18.5 73 18.5C67.7533 18.5 63.5 22.7533 63.5 28Z" fill="#1E3A8A"/>
+  <text x="106" y="18" fill="#1D4ED8" font-size="14" font-weight="800" font-family="Manrope, Inter, system-ui, -apple-system, sans-serif">ACCELERATED</text>
+  <text x="106" y="34" fill="#1D4ED8" font-size="14" font-weight="800" font-family="Manrope, Inter, system-ui, -apple-system, sans-serif">KNOWLEDGE</text>
+  <text x="106" y="50" fill="#1D4ED8" font-size="14" font-weight="800" font-family="Manrope, Inter, system-ui, -apple-system, sans-serif">DISCOVERY</text>
+</svg>

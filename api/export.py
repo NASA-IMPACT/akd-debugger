@@ -15,12 +15,17 @@ from models.result import Result
 from models.run import Run
 from services.analytics import compute_compare_analytics, compute_run_analytics
 from services.html_export import generate_export_html
+from services.context import get_request_context
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter
 
 router = APIRouter()
 
 
 @router.get("/html")
 async def export_html(run_ids: str = Query(...), db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "exports.read")
     ids = [int(x.strip()) for x in run_ids.split(",") if x.strip()]
     if not ids:
         raise HTTPException(400, "At least 1 run ID required")
@@ -30,6 +35,8 @@ async def export_html(run_ids: str = Query(...), db: AsyncSession = Depends(get_
 
 @router.get("/csv")
 async def export_csv(run_ids: str = Query(...), db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "exports.read")
     ids = [int(x.strip()) for x in run_ids.split(",") if x.strip()]
     if not ids:
         raise HTTPException(400, "At least 1 run ID required")
@@ -39,7 +46,8 @@ async def export_csv(run_ids: str = Query(...), db: AsyncSession = Depends(get_d
 
     # Load runs
     for rid in ids:
-        run = await db.get(Run, rid)
+        run_stmt = apply_workspace_filter(select(Run).where(Run.id == rid), Run, ctx)
+        run = (await db.execute(run_stmt)).scalar_one_or_none()
         if run:
             header.extend(
                 [f"{run.label}_response", f"{run.label}_grade", f"{run.label}_time"]
@@ -51,10 +59,14 @@ async def export_csv(run_ids: str = Query(...), db: AsyncSession = Depends(get_d
     first_results = (
         (
             await db.execute(
-                select(Result)
-                .where(Result.run_id == ids[0])
-                .options(selectinload(Result.query), selectinload(Result.grade))
-                .order_by(Result.query_id)
+                apply_workspace_filter(
+                    select(Result)
+                    .where(Result.run_id == ids[0])
+                    .options(selectinload(Result.query), selectinload(Result.grade))
+                    .order_by(Result.query_id),
+                    Result,
+                    ctx,
+                )
             )
         )
         .scalars()
@@ -67,9 +79,13 @@ async def export_csv(run_ids: str = Query(...), db: AsyncSession = Depends(get_d
         results = (
             (
                 await db.execute(
-                    select(Result)
-                    .where(Result.run_id == rid)
-                    .options(selectinload(Result.grade))
+                    apply_workspace_filter(
+                        select(Result)
+                        .where(Result.run_id == rid)
+                        .options(selectinload(Result.grade)),
+                        Result,
+                        ctx,
+                    )
                 )
             )
             .scalars()
@@ -114,22 +130,29 @@ async def export_csv(run_ids: str = Query(...), db: AsyncSession = Depends(get_d
 
 @router.get("/json")
 async def export_json(run_ids: str = Query(...), db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "exports.read")
     ids = [int(x.strip()) for x in run_ids.split(",") if x.strip()]
     if not ids:
         raise HTTPException(400, "At least 1 run ID required")
 
     data = {"runs": []}
     for rid in ids:
-        run = await db.get(Run, rid)
+        run_stmt = apply_workspace_filter(select(Run).where(Run.id == rid), Run, ctx)
+        run = (await db.execute(run_stmt)).scalar_one_or_none()
         if not run:
             continue
         results = (
             (
                 await db.execute(
-                    select(Result)
-                    .where(Result.run_id == rid)
-                    .options(selectinload(Result.query), selectinload(Result.grade))
-                    .order_by(Result.query_id)
+                    apply_workspace_filter(
+                        select(Result)
+                        .where(Result.run_id == rid)
+                        .options(selectinload(Result.query), selectinload(Result.grade))
+                        .order_by(Result.query_id),
+                        Result,
+                        ctx,
+                    )
                 )
             )
             .scalars()

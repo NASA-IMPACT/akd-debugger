@@ -8,8 +8,10 @@ import { tracesApi } from "@/lib/api/traces";
 import type { TraceLogOut } from "@/lib/types";
 import { formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/providers/auth-provider";
 
 export default function TracesPage() {
+  const { user } = useAuth();
   const [status, setStatus] = useState<string>("all");
   const [runId, setRunId] = useState<string>("");
   const [selectedTraceId, setSelectedTraceId] = useState<number | null>(null);
@@ -27,6 +29,7 @@ export default function TracesPage() {
         runId: runIdNum,
         limit: 300,
       }),
+    enabled: !!user,
   });
   const { data: filteredSummary } = useQuery({
     queryKey: ["traces-summary", status, runIdNum],
@@ -35,10 +38,12 @@ export default function TracesPage() {
         status: status === "all" ? undefined : status,
         runId: runIdNum,
       }),
+    enabled: !!user,
   });
   const { data: allSummary } = useQuery({
     queryKey: ["traces-summary-all"],
     queryFn: () => tracesApi.summary(),
+    enabled: !!user,
   });
 
   const selectedTrace: TraceLogOut | undefined = traces.find((t) => t.id === selectedTraceId) ?? traces[0];
@@ -70,34 +75,34 @@ export default function TracesPage() {
       <PageHeader title="API Traces" subtitle={<div className="text-sm text-muted mt-1">OpenAI agent calls persisted in Postgres</div>}>
         <button
           onClick={() => refetch()}
-          className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-semibold text-sm shadow-lg shadow-primary/25 hover:brightness-110 transition-all"
+          className="btn-subtle btn-subtle-primary"
         >
           Refresh
         </button>
       </PageHeader>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-4">
-        <div className="bg-card rounded-xl border border-border p-3">
+        <div className="bg-card rounded-lg border border-border p-3">
           <div className="text-xs text-muted-light">Total Cost (all traces)</div>
           <div className="text-lg font-bold text-foreground">{formatUsd(allSummary?.total_cost_usd || 0)}</div>
         </div>
-        <div className="bg-card rounded-xl border border-border p-3">
+        <div className="bg-card rounded-lg border border-border p-3">
           <div className="text-xs text-muted-light">Total Cost (current filter)</div>
           <div className="text-lg font-bold text-foreground">{formatUsd(filteredSummary?.total_cost_usd || 0)}</div>
         </div>
-        <div className="bg-card rounded-xl border border-border p-3">
+        <div className="bg-card rounded-lg border border-border p-3">
           <div className="text-xs text-muted-light">Trace Count</div>
           <div className="text-lg font-bold text-foreground">{filteredSummary?.count || 0}</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[420px_minmax(0,1fr)] gap-4 lg:h-[calc(100vh-240px)]">
-        <section className="bg-card rounded-xl border border-border shadow-sm overflow-hidden lg:min-h-0 flex flex-col">
+        <section className="bg-card rounded-lg border border-border overflow-hidden lg:min-h-0 flex flex-col">
           <div className="p-4 border-b border-border flex items-center gap-2">
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value)}
-              className="px-3 py-2 rounded-lg text-sm bg-[var(--surface-hover)] border border-border text-foreground outline-none"
+              className="px-2.5 py-1.5 rounded-md text-[13px] bg-[var(--surface-hover)] border border-border text-foreground outline-none"
             >
               <option value="all">All statuses</option>
               <option value="completed">Completed</option>
@@ -108,7 +113,7 @@ export default function TracesPage() {
               value={runId}
               onChange={(e) => setRunId(e.target.value)}
               placeholder="Run ID"
-              className="w-full px-3 py-2 rounded-lg text-sm bg-[var(--surface-hover)] border border-border text-foreground outline-none"
+              className="w-full px-2.5 py-1.5 rounded-md text-[13px] bg-[var(--surface-hover)] border border-border text-foreground outline-none"
             />
           </div>
 
@@ -150,7 +155,7 @@ export default function TracesPage() {
           </div>
         </section>
 
-        <section className="bg-card rounded-xl border border-border shadow-sm lg:min-h-0 overflow-hidden">
+        <section className="bg-card rounded-lg border border-border lg:min-h-0 overflow-hidden">
           {!selectedTrace ? (
             <div className="p-4 text-sm text-muted">Select a trace to inspect payloads.</div>
           ) : (

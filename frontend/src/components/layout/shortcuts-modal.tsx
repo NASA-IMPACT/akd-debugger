@@ -20,6 +20,7 @@ const shortcuts = [
     ["e", "Toggle edit grades"],
   ]],
   ["Other", [
+    ["Cmd/Ctrl+K", "Open command palette"],
     ["t", "Toggle tool calls"],
     ["m", "Toggle grade bar"],
     ["?", "Show shortcuts"],
@@ -48,20 +49,20 @@ export function ShortcutsModal() {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onClick={() => setOpen(false)}>
-      <div className="bg-card rounded-2xl border border-border shadow-2xl p-6 w-96" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-sm font-bold text-foreground">Keyboard Shortcuts</h3>
+      <div className="bg-card rounded-xl border border-border shadow-[0_16px_64px_rgba(0,0,0,0.24)] p-5 w-96" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between mb-3.5">
+          <h3 className="text-[13px] font-semibold text-foreground">Keyboard Shortcuts</h3>
           <button onClick={() => setOpen(false)} className="text-muted hover:text-foreground text-lg leading-none">&times;</button>
         </div>
-        <div className="space-y-4">
+        <div className="space-y-3.5">
           {shortcuts.map(([section, keys]) => (
             <div key={section as string}>
-              <h4 className="text-xs font-semibold text-muted uppercase tracking-wide mb-1.5">{section as string}</h4>
-              <div className="space-y-1">
+              <h4 className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-1.5">{section as string}</h4>
+              <div className="space-y-0.5">
                 {(keys as readonly (readonly [string, string])[]).map(([key, desc]) => (
                   <div key={key} className="flex items-center justify-between py-1">
-                    <span className="text-sm text-muted">{desc}</span>
-                    <kbd className="px-2 py-0.5 rounded bg-[var(--surface)] border border-border text-xs font-mono font-semibold text-foreground">{key}</kbd>
+                    <span className="text-[13px] text-muted">{desc}</span>
+                    <kbd className="px-1.5 py-0.5 rounded-md bg-[var(--surface)] border border-border text-[10px] font-mono font-medium text-foreground">{key}</kbd>
                   </div>
                 ))}
               </div>

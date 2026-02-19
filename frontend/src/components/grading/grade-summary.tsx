@@ -58,7 +58,7 @@ export function GradeSummary({ groups }: Props) {
             "flex justify-center items-center gap-4 flex-wrap rounded-xl transition-all duration-300 ease-out",
             pinned
               ? "glass-opaque px-5 py-2 gap-3 shadow-xl rounded-2xl scale-[0.88] origin-top"
-              : "bg-card px-8 py-4 shadow-sm w-full"
+              : "bg-card px-8 py-4 w-full"
           )}
         >
           {groups.map((g, i) => {

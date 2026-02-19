@@ -20,13 +20,19 @@ from schemas.schemas import (
     SuiteUpdate,
 )
 from services.db_utils import get_or_404
+from services.context import get_request_context
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter, assign_workspace_fields
 
 router = APIRouter()
 
 
 @router.get("", response_model=list[SuiteOut])
 async def list_suites(tag: str | None = None, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "datasets.read")
     stmt = select(BenchmarkSuite)
+    stmt = apply_workspace_filter(stmt, BenchmarkSuite, ctx)
     if tag:
         stmt = stmt.where(BenchmarkSuite.tags.overlap([tag]))
     stmt = stmt.order_by(BenchmarkSuite.created_at.desc())
@@ -48,7 +54,15 @@ async def list_suites(tag: str | None = None, db: AsyncSession = Depends(get_db)
 
 @router.post("", response_model=SuiteOut, status_code=201)
 async def create_suite(body: SuiteCreate, db: AsyncSession = Depends(get_db)):
-    suite = BenchmarkSuite(name=body.name, description=body.description, tags=body.tags)
+    ctx = get_request_context()
+    await require_permission(db, ctx, "datasets.write")
+    suite = BenchmarkSuite(
+        name=body.name,
+        description=body.description,
+        tags=body.tags,
+        visibility_scope=body.visibility_scope,
+    )
+    assign_workspace_fields(suite, ctx)
     db.add(suite)
     await db.commit()
     await db.refresh(suite)
@@ -59,11 +73,14 @@ async def create_suite(body: SuiteCreate, db: AsyncSession = Depends(get_db)):
 
 @router.get("/{suite_id}", response_model=SuiteDetailOut)
 async def get_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "datasets.read")
     stmt = (
         select(BenchmarkSuite)
         .where(BenchmarkSuite.id == suite_id)
         .options(selectinload(BenchmarkSuite.queries))
     )
+    stmt = apply_workspace_filter(stmt, BenchmarkSuite, ctx)
     result = await db.execute(stmt)
     suite = result.scalar_one_or_none()
     if not suite:
@@ -77,6 +94,8 @@ async def get_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
 async def update_suite(
     suite_id: int, body: SuiteUpdate, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "datasets.write")
     suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
     for k, v in body.model_dump(exclude_unset=True).items():
         setattr(suite, k, v)
@@ -95,6 +114,8 @@ async def update_suite(
 
 @router.delete("/{suite_id}", status_code=204)
 async def delete_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "datasets.delete")
     suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
     await db.delete(suite)
     await db.commit()
@@ -104,6 +125,8 @@ async def delete_suite(suite_id: int, db: AsyncSession = Depends(get_db)):
 async def add_query(
     suite_id: int, body: QueryCreate, db: AsyncSession = Depends(get_db)
 ):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "datasets.write")
     suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
     max_ord = (
         await db.execute(
@@ -131,6 +154,8 @@ async def import_csv(
     suite_id: int, file: UploadFile = File(...), db: AsyncSession = Depends(get_db)
 ):
     """Import queries from CSV. Expected columns: id, tag, query, answer, comments."""
+    ctx = get_request_context()
+    await require_permission(db, ctx, "datasets.write")
     suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
 
     content = (await file.read()).decode("utf-8")
@@ -179,6 +204,8 @@ async def import_csv_mapped(
     mapping is a JSON string: {"query_text": "col", "expected_answer": "col", "tag": "col"|null, "comments": "col"|null}
     Unmapped columns are stored in metadata_.
     """
+    ctx = get_request_context()
+    await require_permission(db, ctx, "datasets.write")
     suite = await get_or_404(db, BenchmarkSuite, suite_id, "Suite")
 
     try:

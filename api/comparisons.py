@@ -8,6 +8,9 @@ from models.comparison import Comparison, comparison_runs
 from models.run import Run
 from schemas.schemas import ComparisonCreate, ComparisonOut
 from services.db_utils import get_or_404
+from services.context import get_request_context
+from services.permissions import require_permission
+from services.tenancy import apply_workspace_filter, assign_workspace_fields
 
 router = APIRouter()
 
@@ -15,6 +18,10 @@ router = APIRouter()
 def _to_out(c: Comparison) -> ComparisonOut:
     return ComparisonOut(
         id=c.id,
+        organization_id=c.organization_id,
+        project_id=c.project_id,
+        created_by_user_id=c.created_by_user_id,
+        visibility_scope=c.visibility_scope,
         name=c.name,
         suite_id=c.suite_id,
         suite_name=c.suite.name if c.suite else "",
@@ -27,11 +34,14 @@ def _to_out(c: Comparison) -> ComparisonOut:
 
 @router.post("", response_model=ComparisonOut, status_code=201)
 async def create_comparison(body: ComparisonCreate, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "comparisons.write")
     if len(body.run_ids) < 2:
         raise HTTPException(400, "At least 2 runs are required for a comparison")
 
     # Fetch all runs
     stmt = select(Run).where(Run.id.in_(body.run_ids))
+    stmt = apply_workspace_filter(stmt, Run, ctx)
     result = await db.execute(stmt)
     runs = result.scalars().all()
 
@@ -59,6 +69,7 @@ async def create_comparison(body: ComparisonCreate, db: AsyncSession = Depends(g
             name += f" (+{len(labels) - 4} more)"
 
     comp = Comparison(name=name, suite_id=suite_id)
+    assign_workspace_fields(comp, ctx)
     db.add(comp)
     await db.flush()
 
@@ -76,28 +87,35 @@ async def create_comparison(body: ComparisonCreate, db: AsyncSession = Depends(g
         .where(Comparison.id == comp.id)
         .options(selectinload(Comparison.suite), selectinload(Comparison.runs))
     )
+    stmt = apply_workspace_filter(stmt, Comparison, ctx)
     comp = (await db.execute(stmt)).scalar_one()
     return _to_out(comp)
 
 
 @router.get("", response_model=list[ComparisonOut])
 async def list_comparisons(db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "comparisons.read")
     stmt = (
         select(Comparison)
         .options(selectinload(Comparison.suite), selectinload(Comparison.runs))
         .order_by(Comparison.created_at.desc())
     )
+    stmt = apply_workspace_filter(stmt, Comparison, ctx)
     result = await db.execute(stmt)
     return [_to_out(c) for c in result.scalars().all()]
 
 
 @router.get("/{comparison_id}", response_model=ComparisonOut)
 async def get_comparison(comparison_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "comparisons.read")
     stmt = (
         select(Comparison)
         .where(Comparison.id == comparison_id)
         .options(selectinload(Comparison.suite), selectinload(Comparison.runs))
     )
+    stmt = apply_workspace_filter(stmt, Comparison, ctx)
     result = await db.execute(stmt)
     comp = result.scalar_one_or_none()
     if not comp:
@@ -107,6 +125,8 @@ async def get_comparison(comparison_id: int, db: AsyncSession = Depends(get_db))
 
 @router.delete("/{comparison_id}", status_code=204)
 async def delete_comparison(comparison_id: int, db: AsyncSession = Depends(get_db)):
+    ctx = get_request_context()
+    await require_permission(db, ctx, "comparisons.delete")
     comp = await get_or_404(db, Comparison, comparison_id, "Comparison")
     await db.delete(comp)
     await db.commit()

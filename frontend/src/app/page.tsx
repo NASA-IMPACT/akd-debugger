@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useCallback, useMemo } from "react";
+import Link from "next/link";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useRouter } from "next/navigation";
 import { useTagFilter } from "@/providers/tag-filter-provider";
+import { useWorkspace } from "@/providers/workspace-provider";
 import { runsApi } from "@/lib/api/runs";
 import { suitesApi } from "@/lib/api/suites";
 import { agentsApi } from "@/lib/api/agents";
@@ -33,12 +35,12 @@ import {
   ArrowUp,
   GitCompareArrows,
   Inbox,
-  Search,
   ChevronDown,
 } from "lucide-react";
 
 export default function RunsPage() {
   const { tag } = useTagFilter();
+  const { organizationId, projectId, workspaceReady } = useWorkspace();
   const router = useRouter();
   const queryClient = useQueryClient();
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -73,19 +75,28 @@ export default function RunsPage() {
     useState<GradeColumnMapping>({ query_text: "", grade: "", notes: null });
   const [gradeSection, setGradeSection] = useState(false);
 
-  const { data: runs = [], isLoading } = useQuery({
-    queryKey: ["runs", tag],
+  const {
+    data: runs = [],
+    isLoading,
+    isError,
+    error,
+  } = useQuery({
+    queryKey: ["runs", organizationId, projectId, tag],
     queryFn: () => runsApi.list(tag || undefined),
+    enabled: workspaceReady,
   });
 
   const { data: suites = [] } = useQuery({
-    queryKey: ["suites-list"],
+    queryKey: ["suites-list", organizationId, projectId],
     queryFn: () => suitesApi.list(),
+    enabled: workspaceReady,
   });
   const { data: agents = [] } = useQuery({
-    queryKey: ["agents-list"],
+    queryKey: ["agents-list", organizationId, projectId],
     queryFn: () => agentsApi.list(),
+    enabled: workspaceReady,
   });
+  const showLoading = !workspaceReady || isLoading;
 
   // Unique dataset/agent names from runs for filter dropdowns
   const datasetNames = useMemo(
@@ -146,8 +157,16 @@ export default function RunsPage() {
           .filter(Boolean),
       });
       let gradeResult = null;
-      if (importGradeFile && importGradeMapping.query_text && importGradeMapping.grade) {
-        gradeResult = await gradesApi.importCsv(run.id, importGradeFile, importGradeMapping);
+      if (
+        importGradeFile &&
+        importGradeMapping.query_text &&
+        importGradeMapping.grade
+      ) {
+        gradeResult = await gradesApi.importCsv(
+          run.id,
+          importGradeFile,
+          importGradeMapping,
+        );
       }
       return { run, gradeResult };
     },
@@ -215,14 +234,14 @@ export default function RunsPage() {
   };
 
   const inputCls =
-    "w-full px-3 py-2 rounded-lg text-sm outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
+    "w-full px-2.5 py-1.5 rounded-md text-[13px] outline-none transition-all bg-card border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50";
   const selectCls = inputCls;
 
   return (
     <>
       <PageHeader title="All Benchmarks">
         <button
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] hover:-translate-y-px"
+          className="btn-subtle"
           onClick={() => {
             setImportResult("");
             setImportGradeFile(null);
@@ -235,18 +254,18 @@ export default function RunsPage() {
           <Upload size={15} />
           Import JSON
         </button>
-        <a
+        <Link
           href="/runs/new"
-          className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all duration-200 no-underline"
+          className="btn-subtle btn-subtle-primary no-underline"
         >
           <Plus size={15} />
           New Run
-        </a>
+        </Link>
       </PageHeader>
 
       {/* Loading skeleton */}
-      {isLoading ? (
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+      {showLoading ? (
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
           {[...Array(5)].map((_, i) => (
             <div
               key={i}
@@ -263,9 +282,15 @@ export default function RunsPage() {
             </div>
           ))}
         </div>
+      ) : isError ? (
+        <div className="bg-card rounded-lg border border-border py-16 text-center">
+          <p className="text-muted text-sm">
+            Failed to load benchmarks: {(error as Error).message}
+          </p>
+        </div>
       ) : runs.length === 0 ? (
         /* Empty state */
-        <div className="bg-card rounded-xl border border-border shadow-sm py-20 text-center">
+        <div className="bg-card rounded-lg border border-border py-16 text-center">
           <Inbox size={40} className="mx-auto text-muted-light mb-3" />
           <p className="text-muted text-sm">
             No runs yet. Create a new run or import JSON results.
@@ -273,27 +298,23 @@ export default function RunsPage() {
         </div>
       ) : (
         /* Runs table in card */
-        <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden">
+        <div className="bg-card rounded-lg border border-border overflow-hidden">
           {/* Search & Filter bar */}
           <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
-            <div className="relative flex-1 max-w-sm">
-              <Search
-                size={15}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-light pointer-events-none"
-              />
+            <div className="flex-1 max-w-sm">
               <input
                 type="text"
                 placeholder="Search runs..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-1.5 rounded-lg text-sm outline-none transition-all bg-[var(--surface-hover)] border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50"
+                className="w-full px-3 py-1.5 rounded-md text-[13px] outline-none transition-all bg-[var(--surface-hover)] border border-border text-foreground placeholder:text-muted-light focus:ring-2 focus:ring-ring/30 focus:border-ring/50"
               />
             </div>
             <div className="relative">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-sm outline-none transition-all bg-[var(--surface-hover)] border border-border text-foreground cursor-pointer focus:ring-2 focus:ring-ring/30"
+                className="appearance-none min-w-[160px] pl-2.5 pr-9 py-1.5 rounded-md text-[13px] outline-none transition-all bg-[var(--surface-hover)] border border-border text-foreground cursor-pointer focus:ring-2 focus:ring-ring/30"
               >
                 <option value="all">All Status</option>
                 <option value="completed">Completed</option>
@@ -312,7 +333,7 @@ export default function RunsPage() {
                 <select
                   value={datasetFilter}
                   onChange={(e) => setDatasetFilter(e.target.value)}
-                  className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-sm outline-none transition-all bg-[var(--surface-hover)] border border-border text-foreground cursor-pointer focus:ring-2 focus:ring-ring/30"
+                  className="appearance-none min-w-[170px] pl-2.5 pr-9 py-1.5 rounded-md text-[13px] outline-none transition-all bg-[var(--surface-hover)] border border-border text-foreground cursor-pointer focus:ring-2 focus:ring-ring/30"
                 >
                   <option value="all">All Datasets</option>
                   {datasetNames.map((n) => (
@@ -332,7 +353,7 @@ export default function RunsPage() {
                 <select
                   value={agentFilter}
                   onChange={(e) => setAgentFilter(e.target.value)}
-                  className="appearance-none pl-3 pr-8 py-1.5 rounded-lg text-sm outline-none transition-all bg-[var(--surface-hover)] border border-border text-foreground cursor-pointer focus:ring-2 focus:ring-ring/30"
+                  className="appearance-none min-w-[170px] pl-2.5 pr-9 py-1.5 rounded-md text-[13px] outline-none transition-all bg-[var(--surface-hover)] border border-border text-foreground cursor-pointer focus:ring-2 focus:ring-ring/30"
                 >
                   <option value="all">All Agents</option>
                   {agentNames.map((n) => (
@@ -359,7 +380,7 @@ export default function RunsPage() {
 
           <table className="w-full border-collapse">
             <thead>
-              <tr className="bg-[var(--surface-hover)] border-b border-border">
+              <tr className="border-b border-border/50">
                 <th className="w-10 py-2.5 px-4">
                   <Checkbox
                     checked={
@@ -372,19 +393,19 @@ export default function RunsPage() {
                     onChange={toggleAll}
                   />
                 </th>
-                <th className="py-2.5 px-3 text-left text-muted text-xs font-medium uppercase tracking-wider">
+                <th className="py-2.5 px-3 text-left text-muted-light text-[11px] font-medium uppercase tracking-wider">
                   Label
                 </th>
-                <th className="py-2.5 px-3 text-left text-muted text-xs font-medium uppercase tracking-wider">
+                <th className="py-2.5 px-3 text-left text-muted-light text-[11px] font-medium uppercase tracking-wider">
                   Dataset / Agent
                 </th>
-                <th className="py-2.5 px-3 text-left text-muted text-xs font-medium uppercase tracking-wider">
+                <th className="py-2.5 px-3 text-left text-muted-light text-[11px] font-medium uppercase tracking-wider">
                   Status
                 </th>
-                <th className="py-2.5 px-3 text-left text-muted text-xs font-medium uppercase tracking-wider">
+                <th className="py-2.5 px-3 text-left text-muted-light text-[11px] font-medium uppercase tracking-wider">
                   Tags
                 </th>
-                <th className="py-2.5 px-3 text-left text-muted text-xs font-medium uppercase tracking-wider">
+                <th className="py-2.5 px-3 text-left text-muted-light text-[11px] font-medium uppercase tracking-wider">
                   Created
                 </th>
                 <th className="w-10 py-2.5" />
@@ -410,7 +431,7 @@ export default function RunsPage() {
                   <tr
                     key={run.id}
                     className={cn(
-                      "border-b border-border last:border-b-0 hover:bg-[var(--surface-hover)] cursor-pointer transition-colors duration-100 group",
+                      "border-b border-border/50 last:border-b-0 hover:bg-[var(--surface-hover)] cursor-pointer transition-colors duration-100 group",
                       selected.has(run.id) && "bg-primary/5",
                     )}
                     onClick={(e) => {
@@ -471,7 +492,7 @@ export default function RunsPage() {
                       onClick={(e) => e.stopPropagation()}
                     >
                       <button
-                        className="p-1.5 rounded-lg text-muted-light opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all duration-150"
+                        className="p-1.5 rounded-md text-muted-light opacity-0 group-hover:opacity-100 hover:text-destructive hover:bg-destructive/10 transition-all duration-150"
                         onClick={() =>
                           setDeleteModal({ ids: [run.id], label: run.label })
                         }
@@ -501,11 +522,11 @@ export default function RunsPage() {
       {selected.size > 0 && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 float-up">
           {compareError && (
-            <div className="mb-2 px-4 py-2 bg-destructive/10 border border-destructive/20 rounded-xl text-destructive text-xs font-medium text-center">
+            <div className="mb-2 px-4 py-2 bg-destructive/10 border border-destructive/20 rounded-md text-destructive text-xs font-medium text-center">
               {compareError}
             </div>
           )}
-          <div className="glass rounded-2xl px-5 py-3 flex items-center gap-4 shadow-2xl">
+          <div className="glass rounded-lg px-4 py-2.5 shadow-[0_16px_64px_rgba(0,0,0,0.24)] flex items-center gap-4">
             <span className="text-sm font-medium text-foreground">
               {selected.size} selected
             </span>
@@ -513,14 +534,14 @@ export default function RunsPage() {
             <button
               onClick={handleCompare}
               disabled={selected.size < 2 || comparing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-primary hover:bg-primary/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
             >
               <GitCompareArrows size={15} />
               {comparing ? "Creating..." : "Compare"}
             </button>
             <button
               onClick={() => setDeleteModal({ ids: [...selected] })}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
             >
               <Trash2 size={15} />
               Delete
@@ -531,7 +552,7 @@ export default function RunsPage() {
                 setSelected(new Set());
                 setCompareError("");
               }}
-              className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+              className="p-1.5 rounded-md text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
               title="Deselect all"
             >
               <X size={15} />
@@ -546,13 +567,13 @@ export default function RunsPage() {
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop"
           onClick={(e) => e.target === e.currentTarget && setImportModal(false)}
         >
-          <div className="bg-card border border-border rounded-2xl w-[90%] max-w-[700px] max-h-[85vh] overflow-y-auto p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[90%] max-w-[700px] max-h-[85vh] overflow-y-auto p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-xl font-semibold text-foreground">
                 Import Run from JSON
               </h3>
               <button
-                className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+                className="p-1.5 rounded-md text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
                 onClick={() => setImportModal(false)}
               >
                 <X size={18} />
@@ -585,11 +606,11 @@ export default function RunsPage() {
                     value={importJsonDir}
                     onChange={(e) => setImportJsonDir(e.target.value)}
                     required
-                    placeholder="~/axiom_data/run_0/json"
+                    placeholder="~/akd_data/run_0/json"
                   />
                   <button
                     type="button"
-                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors whitespace-nowrap"
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[13px] font-medium bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors whitespace-nowrap"
                     onClick={openBrowser}
                   >
                     <FolderOpen size={15} />
@@ -650,7 +671,7 @@ export default function RunsPage() {
               </div>
 
               {/* Optional Grade CSV Import */}
-              <div className="mb-4 border border-border rounded-xl overflow-hidden">
+              <div className="mb-4 border border-border rounded-lg overflow-hidden">
                 <button
                   type="button"
                   className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-muted hover:bg-[var(--surface-hover)] transition-colors"
@@ -678,7 +699,7 @@ export default function RunsPage() {
                         <input
                           type="file"
                           accept=".csv"
-                          className="block w-full text-sm text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border file:border-border file:text-sm file:font-medium file:bg-card file:text-foreground hover:file:bg-[var(--surface-hover)] file:cursor-pointer file:transition-colors"
+                          className="block w-full text-sm text-muted file:mr-3 file:py-1.5 file:px-3 file:rounded-md file:border file:border-border file:text-sm file:font-medium file:bg-card file:text-foreground hover:file:bg-[var(--surface-hover)] file:cursor-pointer file:transition-colors"
                           onChange={(e) => {
                             const f = e.target.files?.[0];
                             if (!f) return;
@@ -689,7 +710,9 @@ export default function RunsPage() {
                               const parsed = parseCsvText(text);
                               if (parsed.headers.length === 0) return;
                               setImportGradeCsv(parsed);
-                              setImportGradeMapping(autoMatchGrade(parsed.headers));
+                              setImportGradeMapping(
+                                autoMatchGrade(parsed.headers),
+                              );
                             };
                             reader.readAsText(f);
                           }}
@@ -698,7 +721,7 @@ export default function RunsPage() {
                     ) : (
                       <>
                         {/* File info */}
-                        <div className="flex items-center justify-between gap-3 mb-3 p-2.5 bg-[var(--surface-hover)] rounded-lg">
+                        <div className="flex items-center justify-between gap-3 mb-3 p-2.5 bg-[var(--surface-hover)] rounded-md">
                           <div className="flex items-center gap-2 text-sm min-w-0">
                             <FileSpreadsheet
                               size={16}
@@ -813,30 +836,34 @@ export default function RunsPage() {
                                 </tr>
                               </thead>
                               <tbody>
-                                {importGradeCsv.rows.slice(0, 3).map((row, i) => {
-                                  const getVal = (col: string | null) => {
-                                    if (!col) return "";
-                                    const idx =
-                                      importGradeCsv!.headers.indexOf(col);
-                                    return idx >= 0 ? row[idx] || "" : "";
-                                  };
-                                  return (
-                                    <tr
-                                      key={i}
-                                      className="border-t border-border"
-                                    >
-                                      <td className="p-2 text-foreground max-w-[200px] truncate">
-                                        {getVal(importGradeMapping.query_text)}
-                                      </td>
-                                      <td className="p-2 text-foreground">
-                                        {getVal(importGradeMapping.grade)}
-                                      </td>
-                                      <td className="p-2 text-muted max-w-[150px] truncate">
-                                        {getVal(importGradeMapping.notes)}
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
+                                {importGradeCsv.rows
+                                  .slice(0, 3)
+                                  .map((row, i) => {
+                                    const getVal = (col: string | null) => {
+                                      if (!col) return "";
+                                      const idx =
+                                        importGradeCsv!.headers.indexOf(col);
+                                      return idx >= 0 ? row[idx] || "" : "";
+                                    };
+                                    return (
+                                      <tr
+                                        key={i}
+                                        className="border-t border-border"
+                                      >
+                                        <td className="p-2 text-foreground max-w-[200px] truncate">
+                                          {getVal(
+                                            importGradeMapping.query_text,
+                                          )}
+                                        </td>
+                                        <td className="p-2 text-foreground">
+                                          {getVal(importGradeMapping.grade)}
+                                        </td>
+                                        <td className="p-2 text-muted max-w-[150px] truncate">
+                                          {getVal(importGradeMapping.notes)}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
                               </tbody>
                             </table>
                           </div>
@@ -857,14 +884,14 @@ export default function RunsPage() {
               <div className="flex justify-end gap-3 mt-6">
                 <button
                   type="button"
-                  className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+                  className="px-3.5 py-1.5 rounded-md font-medium text-[13px] bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
                   onClick={() => setImportModal(false)}
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all"
+                  className="px-3.5 py-1.5 bg-primary text-primary-foreground rounded-md font-medium text-[13px] hover:brightness-110 transition-colors"
                 >
                   Import
                 </button>
@@ -880,13 +907,13 @@ export default function RunsPage() {
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop"
           onClick={(e) => e.target === e.currentTarget && setBrowseModal(false)}
         >
-          <div className="bg-card border border-border rounded-2xl w-[90%] max-w-[700px] max-h-[85vh] overflow-y-auto p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[90%] max-w-[700px] max-h-[85vh] overflow-y-auto p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-xl font-semibold text-foreground">
                 Select Folder
               </h3>
               <button
-                className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+                className="p-1.5 rounded-md text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
                 onClick={() => setBrowseModal(false)}
               >
                 <X size={18} />
@@ -894,7 +921,7 @@ export default function RunsPage() {
             </div>
             <div className="flex gap-2 mb-3">
               <button
-                className="p-2 rounded-lg bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+                className="p-2 rounded-md bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
                 onClick={() => browseData.parent && browseGo(browseData.parent)}
               >
                 <ArrowUp size={16} />
@@ -905,7 +932,7 @@ export default function RunsPage() {
                 readOnly
               />
             </div>
-            <div className="max-h-[350px] overflow-y-auto rounded-xl border border-border bg-[var(--surface)]">
+            <div className="max-h-[350px] overflow-y-auto rounded-lg border border-border bg-[var(--surface)]">
               {browseData.items.length === 0 ? (
                 <div className="p-8 text-center text-muted-light italic">
                   Empty folder
@@ -943,13 +970,13 @@ export default function RunsPage() {
             </div>
             <div className="flex justify-end gap-3 mt-4">
               <button
-                className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+                className="px-3.5 py-1.5 rounded-md font-medium text-[13px] bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
                 onClick={() => setBrowseModal(false)}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-primary text-primary-foreground rounded-xl font-medium text-sm shadow-lg shadow-primary/25 hover:brightness-110 hover:-translate-y-px transition-all"
+                className="px-3.5 py-1.5 bg-primary text-primary-foreground rounded-md font-medium text-[13px] hover:brightness-110 transition-colors"
                 onClick={() => {
                   setImportJsonDir(browseData.current);
                   setBrowseModal(false);
@@ -968,7 +995,7 @@ export default function RunsPage() {
           className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center modal-backdrop"
           onClick={(e) => e.target === e.currentTarget && setDeleteModal(null)}
         >
-          <div className="bg-card border border-border rounded-2xl w-[420px] p-6 shadow-2xl modal-content">
+          <div className="bg-card border border-border rounded-xl w-[420px] p-6 shadow-2xl modal-content">
             <div className="flex justify-between items-center mb-4">
               <h3 className="font-bold text-lg text-foreground">
                 {deleteModal.ids.length === 1
@@ -976,7 +1003,7 @@ export default function RunsPage() {
                   : `Delete ${deleteModal.ids.length} Run(s)`}
               </h3>
               <button
-                className="p-1.5 rounded-lg text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+                className="p-1.5 rounded-md text-muted-light hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
                 onClick={() => setDeleteModal(null)}
               >
                 <X size={18} />
@@ -994,7 +1021,7 @@ export default function RunsPage() {
                 </>
               )}
             </p>
-            <label className="flex items-center gap-2 p-3 rounded-xl text-sm cursor-pointer bg-destructive/10 border border-destructive/20">
+            <label className="flex items-center gap-2 p-3 rounded-md text-sm cursor-pointer bg-destructive/10 border border-destructive/20">
               <input
                 type="checkbox"
                 checked={deleteFiles}
@@ -1007,13 +1034,13 @@ export default function RunsPage() {
             </label>
             <div className="flex justify-end gap-3 mt-6">
               <button
-                className="px-4 py-2 rounded-xl font-medium text-sm bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
+                className="px-3.5 py-1.5 rounded-md font-medium text-[13px] bg-card border border-border text-foreground hover:bg-[var(--surface-hover)] transition-colors"
                 onClick={() => setDeleteModal(null)}
               >
                 Cancel
               </button>
               <button
-                className="px-4 py-2 bg-destructive text-white rounded-xl font-medium text-sm shadow-lg shadow-destructive/25 hover:brightness-110 hover:-translate-y-px transition-all"
+                className="px-3.5 py-1.5 bg-destructive text-white rounded-md font-medium text-[13px] hover:brightness-110 transition-colors"
                 onClick={() =>
                   deleteMutation.mutate({
                     ids: deleteModal.ids,
