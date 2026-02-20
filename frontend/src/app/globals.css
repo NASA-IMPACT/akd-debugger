@@ -115,6 +115,16 @@
   --json-null: #8ea0bf;
 }
 
+[data-theme="dark"][data-existential-mode="true"] {
+  --card: rgba(8, 11, 18, 0.42);
+  --surface: rgba(132, 157, 230, 0.055);
+  --surface-hover: rgba(138, 169, 247, 0.11);
+  --border: rgba(161, 186, 255, 0.2);
+  --input: rgba(156, 183, 255, 0.19);
+  --muted: #96a2bc;
+  --muted-light: #6f7b95;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -263,6 +273,32 @@ body::before {
     radial-gradient(circle at 50% 91.7%, rgba(126, 170, 255, 0.5) 0 0.38%, rgba(126, 170, 255, 0) 0.5%);
   transform-origin: 50% 56%;
   animation: existential-orbit-rotate 420s linear infinite;
+}
+
+[data-theme="dark"][data-existential-mode="true"] .akd-sidebar,
+[data-theme="dark"][data-existential-mode="true"] .akd-workspace-bar,
+[data-theme="dark"][data-existential-mode="true"] .akd-mobile-bar {
+  background: color-mix(in srgb, #070b14 54%, transparent);
+  border-color: color-mix(in srgb, var(--border) 86%, #b8cbff 14%);
+  backdrop-filter: blur(14px) saturate(132%);
+  -webkit-backdrop-filter: blur(14px) saturate(132%);
+}
+
+[data-theme="dark"][data-existential-mode="true"] .panel,
+[data-theme="dark"][data-existential-mode="true"] .glass,
+[data-theme="dark"][data-existential-mode="true"] .glass-opaque,
+[data-theme="dark"][data-existential-mode="true"] .clean-list-row {
+  background: color-mix(in srgb, #0a1020 44%, transparent);
+  border-color: color-mix(in srgb, var(--border) 88%, #b7cbff 12%);
+  backdrop-filter: blur(10px) saturate(122%);
+  -webkit-backdrop-filter: blur(10px) saturate(122%);
+}
+
+[data-theme="dark"][data-existential-mode="true"] input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+[data-theme="dark"][data-existential-mode="true"] select,
+[data-theme="dark"][data-existential-mode="true"] textarea {
+  background: color-mix(in srgb, #0a1121 32%, transparent);
+  border-color: color-mix(in srgb, var(--border) 84%, #b7cbff 16%);
 }
 
 @keyframes existential-orbit-rotate {
