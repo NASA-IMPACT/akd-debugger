@@ -8,6 +8,7 @@ const groups = [
     links: [
       { href: "/settings/account", label: "Account" },
       { href: "/settings/organization", label: "Workspace" },
+      { href: "/settings/roles", label: "Roles" },
       { href: "/settings/password-reset", label: "Password Reset" },
     ],
   },

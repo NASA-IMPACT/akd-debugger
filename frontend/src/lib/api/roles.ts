@@ -8,6 +8,13 @@ export const rolesApi = {
       method: "POST",
       body: JSON.stringify({ name, slug }),
     }),
+  deleteOrganization: (roleId: number, replacementRoleId?: number | null) =>
+    apiFetch<void>(
+      `/api/roles/organization/${roleId}${replacementRoleId ? `?replacement_role_id=${replacementRoleId}` : ""}`,
+      {
+        method: "DELETE",
+      }
+    ),
 
   listProject: () => apiFetch<RoleOut[]>("/api/roles/project"),
   createProject: (name: string, slug: string) =>
@@ -15,6 +22,13 @@ export const rolesApi = {
       method: "POST",
       body: JSON.stringify({ name, slug }),
     }),
+  deleteProject: (roleId: number, replacementRoleId?: number | null) =>
+    apiFetch<void>(
+      `/api/roles/project/${roleId}${replacementRoleId ? `?replacement_role_id=${replacementRoleId}` : ""}`,
+      {
+        method: "DELETE",
+      }
+    ),
 
   setOrganizationPermissions: (roleId: number, permissions: Array<{ permission_id: number; effect: "allow" | "deny" }>) =>
     apiFetch<{ ok: boolean }>(`/api/roles/organization/${roleId}/permissions`, {

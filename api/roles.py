@@ -1,11 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import delete, select
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from models.invitation import Invitation
+from models.organization_membership import OrganizationMembership
 from models.organization_role import OrganizationRole
 from models.organization_role_permission import OrganizationRolePermission
 from models.permission import Permission
+from models.project_membership import ProjectMembership
 from models.project_role import ProjectRole
 from models.project_role_permission import ProjectRolePermission
 from schemas.schemas import RoleCreate, RoleOut, RolePermissionOut, RolePermissionUpdate
@@ -29,6 +32,64 @@ async def list_organization_roles(
         )
     ).scalars().all()
     return [RoleOut.model_validate(r) for r in rows]
+
+
+@router.delete("/organization/{role_id}", status_code=204, response_class=Response)
+async def delete_organization_role(
+    role_id: int,
+    replacement_role_id: int | None = Query(default=None),
+    ctx: WorkspaceContext = Depends(require_org_context),
+    db: AsyncSession = Depends(get_db),
+):
+    await require_permission(db, ctx, "organizations.manage_roles")
+    role = await db.get(OrganizationRole, role_id)
+    if not role or role.organization_id != ctx.organization_id:
+        raise HTTPException(404, "Organization role not found")
+    if role.is_builtin:
+        raise HTTPException(400, "Built-in organization roles cannot be deleted")
+
+    replacement: OrganizationRole | None = None
+    if replacement_role_id is not None:
+        replacement = await db.get(OrganizationRole, replacement_role_id)
+        if not replacement or replacement.organization_id != ctx.organization_id:
+            raise HTTPException(400, "Invalid replacement organization role")
+        if replacement.id == role.id:
+            raise HTTPException(400, "Replacement role must be different from the role being deleted")
+
+    active_memberships_count = (
+        await db.execute(
+            select(func.count(OrganizationMembership.id)).where(
+                OrganizationMembership.organization_id == ctx.organization_id,
+                OrganizationMembership.role_id == role.id,
+                OrganizationMembership.is_active.is_(True),
+            )
+        )
+    ).scalar_one()
+    if active_memberships_count > 0 and replacement is None:
+        raise HTTPException(400, "Role is assigned to active users. Provide replacement_role_id to reassign before deletion.")
+
+    if replacement is not None:
+        await db.execute(
+            update(OrganizationMembership)
+            .where(
+                OrganizationMembership.organization_id == ctx.organization_id,
+                OrganizationMembership.role_id == role.id,
+            )
+            .values(role_id=replacement.id)
+        )
+        await db.execute(
+            update(Invitation)
+            .where(
+                Invitation.organization_id == ctx.organization_id,
+                Invitation.org_role_id == role.id,
+                Invitation.accepted_at.is_(None),
+                Invitation.revoked_at.is_(None),
+            )
+            .values(org_role_id=replacement.id)
+        )
+
+    await db.delete(role)
+    await db.commit()
 
 
 @router.post("/organization", response_model=RoleOut, status_code=201)
@@ -75,6 +136,80 @@ async def list_project_roles(
         )
     ).scalars().all()
     return [RoleOut.model_validate(r) for r in rows]
+
+
+@router.delete("/project/{role_id}", status_code=204, response_class=Response)
+async def delete_project_role(
+    role_id: int,
+    replacement_role_id: int | None = Query(default=None),
+    ctx: WorkspaceContext = Depends(require_org_context),
+    db: AsyncSession = Depends(get_db),
+):
+    await require_permission(db, ctx, "projects.manage_roles")
+    role = await db.get(ProjectRole, role_id)
+    if not role or role.organization_id != ctx.organization_id:
+        raise HTTPException(404, "Project role not found")
+    if role.is_builtin:
+        raise HTTPException(400, "Built-in project roles cannot be deleted")
+
+    replacement: ProjectRole | None = None
+    if replacement_role_id is not None:
+        replacement = await db.get(ProjectRole, replacement_role_id)
+        if not replacement or replacement.organization_id != ctx.organization_id:
+            raise HTTPException(400, "Invalid replacement project role")
+        if replacement.id == role.id:
+            raise HTTPException(400, "Replacement role must be different from the role being deleted")
+
+    active_memberships_count = (
+        await db.execute(
+            select(func.count(ProjectMembership.id)).where(
+                ProjectMembership.organization_id == ctx.organization_id,
+                ProjectMembership.role_id == role.id,
+                ProjectMembership.is_active.is_(True),
+            )
+        )
+    ).scalar_one()
+    if active_memberships_count > 0 and replacement is None:
+        raise HTTPException(400, "Role is assigned to active users. Provide replacement_role_id to reassign before deletion.")
+
+    if replacement is not None:
+        await db.execute(
+            update(ProjectMembership)
+            .where(
+                ProjectMembership.organization_id == ctx.organization_id,
+                ProjectMembership.role_id == role.id,
+            )
+            .values(role_id=replacement.id)
+        )
+
+    pending_invitations = (
+        await db.execute(
+            select(Invitation).where(
+                Invitation.organization_id == ctx.organization_id,
+                Invitation.accepted_at.is_(None),
+                Invitation.revoked_at.is_(None),
+            )
+        )
+    ).scalars().all()
+    replacement_id = replacement.id if replacement else None
+    for invitation in pending_invitations:
+        assignments = invitation.project_assignments or []
+        updated_assignments: list[dict] = []
+        changed = False
+        for assignment in assignments:
+            role_value = assignment.get("role_id")
+            if isinstance(role_value, int) and role_value == role.id:
+                next_assignment = dict(assignment)
+                next_assignment["role_id"] = replacement_id
+                updated_assignments.append(next_assignment)
+                changed = True
+            else:
+                updated_assignments.append(assignment)
+        if changed:
+            invitation.project_assignments = updated_assignments
+
+    await db.delete(role)
+    await db.commit()
 
 
 @router.post("/project", response_model=RoleOut, status_code=201)
