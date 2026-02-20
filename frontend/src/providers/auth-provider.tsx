@@ -3,6 +3,13 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import { authApi } from "@/lib/api/auth";
 import { AUTH_UNAUTHORIZED_EVENT } from "@/lib/api/client";
+import {
+  isExistentialModeUser,
+  normalizeEmail,
+  syncExistentialModeAttribute,
+  THEME_SYNC_EVENT,
+  USER_EMAIL_STORAGE_KEY,
+} from "@/lib/existential-mode";
 import type { AuthLoginIn, AuthSessionOut, AuthSignupIn, OrganizationOut, UserOut } from "@/lib/types";
 
 type AuthContextValue = {
@@ -60,6 +67,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     window.addEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
     return () => window.removeEventListener(AUTH_UNAUTHORIZED_EVENT, onUnauthorized);
   }, [clearSession]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const email = normalizeEmail(session?.user?.email);
+    if (email) {
+      window.localStorage.setItem(USER_EMAIL_STORAGE_KEY, email);
+    } else {
+      window.localStorage.removeItem(USER_EMAIL_STORAGE_KEY);
+    }
+    syncExistentialModeAttribute(email);
+
+    const storedTheme = window.localStorage.getItem("theme");
+    if ((storedTheme !== "light" && storedTheme !== "dark") && isExistentialModeUser(email)) {
+      window.localStorage.setItem("theme", "dark");
+      document.documentElement.setAttribute("data-theme", "dark");
+      window.dispatchEvent(new Event(THEME_SYNC_EVENT));
+    }
+  }, [session?.user?.email]);
 
   const login = useCallback(async (body: AuthLoginIn) => {
     const next = await authApi.login(body);

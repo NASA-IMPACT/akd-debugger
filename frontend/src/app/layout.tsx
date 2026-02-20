@@ -48,7 +48,7 @@ export default function RootLayout({
       <head>
         <script
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t)document.documentElement.setAttribute('data-theme',t)}catch(e){}})()`,
+            __html: `(function(){try{var d=document.documentElement;var e=(localStorage.getItem('akd.user.email')||'').trim().toLowerCase();var x=e==='np0069@uah.edu';if(x){d.setAttribute('data-existential-mode','true')}else{d.removeAttribute('data-existential-mode')}var t=localStorage.getItem('theme');if(t!=='light'&&t!=='dark'){t=x?'dark':'light'}d.setAttribute('data-theme',t)}catch(e){}})()`,
           }}
         />
       </head>

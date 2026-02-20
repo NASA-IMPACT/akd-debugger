@@ -7,10 +7,13 @@ import { withCurrentOrigin } from "@/lib/invitation-links";
 import { organizationsApi } from "@/lib/api/organizations";
 import { projectsApi } from "@/lib/api/projects";
 import { rolesApi } from "@/lib/api/roles";
+import { formatRoleNameForViewer, formatRoleSlugForViewer } from "@/lib/existential-mode";
+import { useAuth } from "@/providers/auth-provider";
 import { useWorkspace } from "@/providers/workspace-provider";
 
 export default function MembersSettingsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { organizationId, projectId } = useWorkspace();
   const [email, setEmail] = useState("");
   const [inviteOrgRoleId, setInviteOrgRoleId] = useState("");
@@ -66,8 +69,8 @@ export default function MembersSettingsPage() {
     return byEmail;
   }, [organizationMembers]);
   const projectRoleNameById = useMemo(
-    () => new Map(projectRoles.map((role) => [role.id, role.name])),
-    [projectRoles]
+    () => new Map(projectRoles.map((role) => [role.id, formatRoleNameForViewer(role.name, user?.email)])),
+    [projectRoles, user?.email]
   );
 
   function selectedRoleIdOrNull(raw: string): number | null {
@@ -197,7 +200,7 @@ export default function MembersSettingsPage() {
               <option value="">Default organization role (org_user)</option>
               {organizationRoles.map((role) => (
                 <option key={role.id} value={String(role.id)}>
-                  {role.name} ({role.slug})
+                  {formatRoleNameForViewer(role.name, user?.email)} ({formatRoleSlugForViewer(role.slug, user?.email)})
                 </option>
               ))}
             </select>
@@ -213,7 +216,7 @@ export default function MembersSettingsPage() {
               <option value="">Default project role (project_user)</option>
               {projectRoles.map((role) => (
                 <option key={role.id} value={String(role.id)}>
-                  {role.name} ({role.slug})
+                  {formatRoleNameForViewer(role.name, user?.email)} ({formatRoleSlugForViewer(role.slug, user?.email)})
                 </option>
               ))}
             </select>
@@ -286,7 +289,7 @@ export default function MembersSettingsPage() {
                     <option value="">Default project role (project_user)</option>
                     {projectRoles.map((role) => (
                       <option key={role.id} value={String(role.id)}>
-                        {role.name}
+                        {formatRoleNameForViewer(role.name, user?.email)}
                       </option>
                     ))}
                   </select>

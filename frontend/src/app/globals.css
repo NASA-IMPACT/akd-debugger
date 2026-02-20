@@ -224,6 +224,16 @@ body::before {
   background: var(--background);
 }
 
+[data-theme="dark"][data-existential-mode="true"] body::before {
+  background:
+    radial-gradient(circle at 16% 18%, rgba(145, 161, 255, 0.12) 0, rgba(145, 161, 255, 0) 36%),
+    radial-gradient(circle at 78% 12%, rgba(92, 121, 212, 0.08) 0, rgba(92, 121, 212, 0) 28%),
+    radial-gradient(circle at 62% 72%, rgba(116, 132, 198, 0.08) 0, rgba(116, 132, 198, 0) 34%),
+    radial-gradient(circle at 84% 82%, rgba(255, 255, 255, 0.065) 0, rgba(255, 255, 255, 0) 1.2%),
+    radial-gradient(circle at 26% 66%, rgba(255, 255, 255, 0.055) 0, rgba(255, 255, 255, 0) 1.1%),
+    linear-gradient(180deg, #08090f 0%, #090a12 46%, #0a0a0f 100%);
+}
+
 .app-main {
   min-height: 100vh;
   transition: padding 0.2s ease;

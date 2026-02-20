@@ -3,12 +3,15 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invitationsApi } from "@/lib/api/invitations";
+import { formatRoleNameForViewer, formatRoleSlugForViewer } from "@/lib/existential-mode";
 import { withCurrentOrigin } from "@/lib/invitation-links";
 import { rolesApi } from "@/lib/api/roles";
+import { useAuth } from "@/providers/auth-provider";
 import { useWorkspace } from "@/providers/workspace-provider";
 
 export default function InvitationsSettingsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const { organizationId, projectId, projects } = useWorkspace();
   const [email, setEmail] = useState("");
   const [createdLink, setCreatedLink] = useState<string | null>(null);
@@ -76,8 +79,12 @@ export default function InvitationsSettingsPage() {
       await refetch();
     },
   });
-  const orgRoleNameById = new Map(organizationRoles.map((role) => [role.id, role.name]));
-  const projectRoleNameById = new Map(projectRoles.map((role) => [role.id, role.name]));
+  const orgRoleNameById = new Map(
+    organizationRoles.map((role) => [role.id, formatRoleNameForViewer(role.name, user?.email)])
+  );
+  const projectRoleNameById = new Map(
+    projectRoles.map((role) => [role.id, formatRoleNameForViewer(role.name, user?.email)])
+  );
   const orgRolesErrorMessage = organizationRolesError instanceof Error ? organizationRolesError.message : null;
   const projectRolesErrorMessage = projectRolesError instanceof Error ? projectRolesError.message : null;
 
@@ -111,7 +118,7 @@ export default function InvitationsSettingsPage() {
               <option value="">Default organization role (org_user)</option>
               {organizationRoles.map((role) => (
                 <option key={role.id} value={String(role.id)}>
-                  {role.name} ({role.slug})
+                  {formatRoleNameForViewer(role.name, user?.email)} ({formatRoleSlugForViewer(role.slug, user?.email)})
                 </option>
               ))}
             </select>
@@ -127,7 +134,7 @@ export default function InvitationsSettingsPage() {
               <option value="">Default project role (project_user)</option>
               {projectRoles.map((role) => (
                 <option key={role.id} value={String(role.id)}>
-                  {role.name} ({role.slug})
+                  {formatRoleNameForViewer(role.name, user?.email)} ({formatRoleSlugForViewer(role.slug, user?.email)})
                 </option>
               ))}
             </select>

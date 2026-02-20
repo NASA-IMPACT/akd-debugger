@@ -2,8 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { formatRoleNameForViewer, formatRoleSlugForViewer } from "@/lib/existential-mode";
 import { permissionsApi } from "@/lib/api/permissions";
 import { rolesApi } from "@/lib/api/roles";
+import { useAuth } from "@/providers/auth-provider";
 
 type PermissionEffect = "inherit" | "allow" | "deny";
 
@@ -25,6 +27,7 @@ function effectMapFromRows(rows: Array<{ permission_id: number; effect: "allow" 
 
 export default function ProjectRolesSettingsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [projectRoleName, setProjectRoleName] = useState("");
   const [projectRoleSlug, setProjectRoleSlug] = useState("");
   const [selectedProjectRoleId, setSelectedProjectRoleId] = useState("");
@@ -186,7 +189,7 @@ export default function ProjectRolesSettingsPage() {
             >
               {projectRoles.map((role) => (
                 <option key={role.id} value={String(role.id)}>
-                  {role.name} ({role.slug}){role.is_builtin ? " · built-in" : ""}
+                  {formatRoleNameForViewer(role.name, user?.email)} ({formatRoleSlugForViewer(role.slug, user?.email)}){role.is_builtin ? " · built-in" : ""}
                 </option>
               ))}
             </select>
@@ -256,7 +259,7 @@ export default function ProjectRolesSettingsPage() {
               <option value="">Select role</option>
               {deletableRoles.map((role) => (
                 <option key={role.id} value={String(role.id)}>
-                  {role.name} ({role.slug})
+                  {formatRoleNameForViewer(role.name, user?.email)} ({formatRoleSlugForViewer(role.slug, user?.email)})
                 </option>
               ))}
             </select>
@@ -273,7 +276,7 @@ export default function ProjectRolesSettingsPage() {
                 .filter((role) => String(role.id) !== deleteRoleId)
                 .map((role) => (
                   <option key={role.id} value={String(role.id)}>
-                    {role.name} ({role.slug})
+                    {formatRoleNameForViewer(role.name, user?.email)} ({formatRoleSlugForViewer(role.slug, user?.email)})
                   </option>
                 ))}
             </select>
