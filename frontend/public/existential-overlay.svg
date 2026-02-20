@@ -16,6 +16,13 @@
       <circle cx="18" cy="14" r="8" fill="#d8c8aa" fill-opacity=".16" />
       <path d="M12 23c2.4-3 9.6-3 12 0" stroke="#d8c8aa" stroke-opacity=".16" stroke-width="1.5" stroke-linecap="round" />
     </symbol>
+    <symbol id="cat-mark" viewBox="0 0 30 24">
+      <path d="M8 8 4 3 3 10z" fill="#d8c8aa" fill-opacity=".18" />
+      <path d="m22 8 4-5 1 7z" fill="#d8c8aa" fill-opacity=".18" />
+      <ellipse cx="15" cy="13.5" rx="8.2" ry="6.3" fill="#d8c8aa" fill-opacity=".12" />
+      <path d="M11.5 13.5h.01M18.5 13.5h.01" stroke="#d8c8aa" stroke-opacity=".24" stroke-width="1.6" stroke-linecap="round" />
+      <path d="M13 16.2c1.3.9 2.7.9 4 0" stroke="#d8c8aa" stroke-opacity=".2" stroke-width="1.2" stroke-linecap="round" />
+    </symbol>
   </defs>
 
   <g fill="#d2c2a1" fill-opacity=".23" font-family="Georgia, 'Times New Roman', serif" font-size="18" letter-spacing=".45">
@@ -39,6 +46,13 @@
     <use href="#sage-mark" x="315" y="330" width="28" height="21" />
     <use href="#sage-mark" x="1176" y="488" width="32" height="24" />
     <use href="#sage-mark" x="382" y="706" width="30" height="23" />
+  </g>
+
+  <g opacity=".24">
+    <use href="#cat-mark" x="1016" y="146" width="24" height="19" />
+    <use href="#cat-mark" x="264" y="520" width="21" height="17" />
+    <use href="#cat-mark" x="1116" y="640" width="22" height="17" />
+    <use href="#cat-mark" x="488" y="782" width="20" height="16" />
   </g>
 
   <rect width="1400" height="900" fill="#0c0b10" opacity=".015" />
