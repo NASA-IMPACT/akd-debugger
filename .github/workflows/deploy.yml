@@ -1,0 +1,30 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [develop]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          command_timeout: 15m
+          script: |
+            cd ~/akd-debugger
+            git pull origin develop
+
+            # Amazon Linux may have docker-compose (v1) or docker compose (v2)
+            if docker compose version &>/dev/null; then
+              COMPOSE="docker compose"
+            else
+              COMPOSE="docker-compose"
+            fi
+
+            $COMPOSE -f docker-compose.prod.yml up -d --build
+            $COMPOSE -f docker-compose.prod.yml exec app sh -c "uv run alembic upgrade head"
