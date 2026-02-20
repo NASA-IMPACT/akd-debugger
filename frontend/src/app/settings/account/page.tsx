@@ -1,12 +1,20 @@
 "use client";
 
 import { useMemo } from "react";
+import { isExistentialModeUser } from "@/lib/existential-mode";
 import { useAuth } from "@/providers/auth-provider";
 import { useWorkspace } from "@/providers/workspace-provider";
 
 export default function AccountSettingsPage() {
   const { user, organizations } = useAuth();
   const { organizationId, projectId, projects } = useWorkspace();
+  const isExistentialUser = isExistentialModeUser(user?.email);
+
+  const existentialUsername = useMemo(() => {
+    if (!isExistentialUser) return null;
+    const localPart = user?.email?.split("@")[0]?.trim().toLowerCase() || "seeker";
+    return `void.${localPart}`;
+  }, [isExistentialUser, user?.email]);
 
   const activeOrganization = useMemo(
     () => organizations.find((org) => org.id === organizationId) ?? null,
@@ -36,6 +44,12 @@ export default function AccountSettingsPage() {
             <div className="text-xs text-muted mb-1">Email</div>
             <div className="text-sm text-foreground">{user?.email ?? "-"}</div>
           </div>
+          {isExistentialUser && (
+            <div>
+              <div className="text-xs text-muted mb-1">Existential Username</div>
+              <div className="text-sm text-foreground">{existentialUsername}</div>
+            </div>
+          )}
         </div>
       </section>
 

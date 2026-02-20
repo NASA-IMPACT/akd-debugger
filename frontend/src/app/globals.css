@@ -226,12 +226,56 @@ body::before {
 
 [data-theme="dark"][data-existential-mode="true"] body::before {
   background:
+    radial-gradient(ellipse at center, rgba(4, 5, 11, 0) 0%, rgba(6, 7, 13, 0.54) 56%, rgba(7, 8, 14, 0.9) 100%),
+    repeating-conic-gradient(
+      from 10deg at 50% 56%,
+      rgba(112, 138, 233, 0.14) 0deg 9deg,
+      rgba(31, 43, 86, 0.02) 9deg 18deg,
+      rgba(80, 103, 188, 0.12) 18deg 28deg,
+      rgba(17, 24, 49, 0.02) 28deg 38deg
+    ),
+    radial-gradient(circle at 50% 56%, rgba(127, 152, 245, 0.22) 0, rgba(127, 152, 245, 0) 43%),
     radial-gradient(circle at 16% 18%, rgba(145, 161, 255, 0.12) 0, rgba(145, 161, 255, 0) 36%),
     radial-gradient(circle at 78% 12%, rgba(92, 121, 212, 0.08) 0, rgba(92, 121, 212, 0) 28%),
     radial-gradient(circle at 62% 72%, rgba(116, 132, 198, 0.08) 0, rgba(116, 132, 198, 0) 34%),
     radial-gradient(circle at 84% 82%, rgba(255, 255, 255, 0.065) 0, rgba(255, 255, 255, 0) 1.2%),
     radial-gradient(circle at 26% 66%, rgba(255, 255, 255, 0.055) 0, rgba(255, 255, 255, 0) 1.1%),
-    linear-gradient(180deg, #08090f 0%, #090a12 46%, #0a0a0f 100%);
+    linear-gradient(180deg, #090910 0%, #0b0a12 42%, #0a0a0f 100%);
+  transform-origin: 50% 56%;
+  animation: existential-galaxy-spin 160s linear infinite;
+}
+
+[data-theme="dark"][data-existential-mode="true"] body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.36;
+  background-image: url("/existential-overlay.svg");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center;
+  mix-blend-mode: screen;
+  animation: existential-overlay-drift 72s ease-in-out infinite alternate;
+}
+
+@keyframes existential-overlay-drift {
+  0% {
+    transform: translate3d(0, 0, 0) scale(1.01);
+  }
+  100% {
+    transform: translate3d(0.35%, -0.25%, 0) scale(1.025);
+  }
+}
+
+@keyframes existential-galaxy-spin {
+  0% {
+    transform: rotate(0deg) scale(1.04);
+  }
+  100% {
+    transform: rotate(360deg) scale(1.04);
+  }
 }
 
 .app-main {
