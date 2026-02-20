@@ -13,6 +13,7 @@ from models.organization_membership import OrganizationMembership
 from models.organization_role import OrganizationRole
 from models.project import Project
 from models.project_membership import ProjectMembership
+from models.project_role import ProjectRole
 from models.user import User
 from models.user_permission_grant import UserPermissionGrant
 from services.auth import require_user
@@ -154,6 +155,19 @@ async def require_org_context(
         raise HTTPException(403, "You are not a member of this organization")
 
     is_org_admin = False
+    if org_membership.role_id is None:
+        default_org_role = (
+            await db.execute(
+                select(OrganizationRole).where(
+                    OrganizationRole.organization_id == org_id,
+                    OrganizationRole.slug == "org_user",
+                )
+            )
+        ).scalar_one_or_none()
+        if default_org_role:
+            org_membership.role_id = default_org_role.id
+            await db.commit()
+            await db.refresh(org_membership)
     if org_membership.role_id is not None:
         role = await db.get(OrganizationRole, org_membership.role_id)
         if role and role.slug == "org_admin":
@@ -208,6 +222,19 @@ async def require_project_context(
         ProjectMembership.is_active.is_(True),
     )
     project_membership = (await db.execute(stmt)).scalar_one_or_none()
+    if project_membership and project_membership.role_id is None:
+        default_project_role = (
+            await db.execute(
+                select(ProjectRole).where(
+                    ProjectRole.organization_id == org_ctx.organization_id,
+                    ProjectRole.slug == "project_user",
+                )
+            )
+        ).scalar_one_or_none()
+        if default_project_role:
+            project_membership.role_id = default_project_role.id
+            await db.commit()
+            await db.refresh(project_membership)
 
     if not project_membership and not org_ctx.is_org_admin:
         grant_stmt = select(UserPermissionGrant.id).where(

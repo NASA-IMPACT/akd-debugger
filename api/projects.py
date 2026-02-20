@@ -10,12 +10,13 @@ from models.user import User
 from schemas.schemas import (
     ProjectCreate,
     ProjectMembershipCreate,
+    ProjectMembershipRoleUpdate,
     ProjectMembershipOut,
     ProjectOut,
     ProjectUpdate,
 )
 from services.context import WorkspaceContext, require_org_context
-from services.permissions import get_role_by_slug, require_permission
+from services.permissions import get_role_by_id, get_role_by_slug, require_permission
 from services.workspaces import create_project_for_org
 
 router = APIRouter()
@@ -65,6 +66,32 @@ async def _resolve_project_context(
         project_membership=membership,
         is_org_admin=org_ctx.is_org_admin,
     )
+
+
+async def _resolve_project_role_id(
+    db: AsyncSession,
+    *,
+    organization_id: int,
+    role_id: int | None,
+) -> int | None:
+    if role_id is None:
+        default_role = await get_role_by_slug(
+            db,
+            organization_id=organization_id,
+            role_type="project",
+            slug="project_user",
+        )
+        return default_role.id if default_role else None
+
+    role = await get_role_by_id(
+        db,
+        organization_id=organization_id,
+        role_type="project",
+        role_id=role_id,
+    )
+    if not role:
+        raise HTTPException(400, "Invalid project role for this organization")
+    return role.id
 
 
 @router.get("", response_model=list[ProjectOut])
@@ -205,22 +232,24 @@ async def add_project_member(
                 ProjectMembership.organization_id == ctx.organization_id,
                 ProjectMembership.project_id == project_id,
                 ProjectMembership.user_id == body.user_id,
-                ProjectMembership.is_active.is_(True),
             )
         )
     ).scalar_one_or_none()
-    if existing_project_membership:
+    if existing_project_membership and existing_project_membership.is_active:
         raise HTTPException(409, "User is already a member of this project")
 
-    role_id = body.role_id
-    if role_id is None:
-        default_role = await get_role_by_slug(
-            db,
-            organization_id=ctx.organization_id,
-            role_type="project",
-            slug="project_user",
-        )
-        role_id = default_role.id if default_role else None
+    role_id = await _resolve_project_role_id(
+        db,
+        organization_id=ctx.organization_id,
+        role_id=body.role_id,
+    )
+
+    if existing_project_membership:
+        existing_project_membership.is_active = True
+        existing_project_membership.role_id = role_id
+        await db.commit()
+        await db.refresh(existing_project_membership)
+        return _project_membership_out(existing_project_membership, user)
 
     membership = ProjectMembership(
         organization_id=ctx.organization_id,
@@ -232,6 +261,41 @@ async def add_project_member(
     db.add(membership)
     await db.commit()
     await db.refresh(membership)
+    return _project_membership_out(membership, user)
+
+
+@router.patch("/{project_id}/members/{user_id}", response_model=ProjectMembershipOut)
+async def update_project_member_role(
+    project_id: int,
+    user_id: int,
+    body: ProjectMembershipRoleUpdate,
+    ctx: WorkspaceContext = Depends(require_org_context),
+    db: AsyncSession = Depends(get_db),
+):
+    _, project_ctx = await _resolve_project_context(db, ctx, project_id)
+    await require_permission(db, project_ctx, "projects.manage_members")
+
+    membership = (
+        await db.execute(
+            select(ProjectMembership).where(
+                ProjectMembership.organization_id == ctx.organization_id,
+                ProjectMembership.project_id == project_id,
+                ProjectMembership.user_id == user_id,
+                ProjectMembership.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(404, "Project membership not found")
+
+    membership.role_id = await _resolve_project_role_id(
+        db,
+        organization_id=ctx.organization_id,
+        role_id=body.role_id,
+    )
+    await db.commit()
+    await db.refresh(membership)
+    user = await db.get(User, user_id)
     return _project_membership_out(membership, user)
 
 

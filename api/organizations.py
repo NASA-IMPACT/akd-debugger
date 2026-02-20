@@ -8,13 +8,14 @@ from models.organization_membership import OrganizationMembership
 from models.user import User
 from schemas.schemas import (
     MembershipCreate,
+    MembershipRoleUpdate,
     MembershipOut,
     OrganizationCreate,
     OrganizationOut,
     OrganizationUpdate,
 )
 from services.context import WorkspaceContext, get_current_user, require_org_context
-from services.permissions import get_role_by_slug, require_permission
+from services.permissions import get_role_by_id, get_role_by_slug, require_permission
 from services.workspaces import create_organization_with_defaults
 
 router = APIRouter()
@@ -31,6 +32,32 @@ def _membership_out(row: OrganizationMembership, user: User | None = None) -> Me
         is_active=row.is_active,
         created_at=row.created_at,
     )
+
+
+async def _resolve_org_role_id(
+    db: AsyncSession,
+    *,
+    organization_id: int,
+    role_id: int | None,
+) -> int | None:
+    if role_id is None:
+        role = await get_role_by_slug(
+            db,
+            organization_id=organization_id,
+            role_type="organization",
+            slug="org_user",
+        )
+        return role.id if role else None
+
+    role = await get_role_by_id(
+        db,
+        organization_id=organization_id,
+        role_type="organization",
+        role_id=role_id,
+    )
+    if not role:
+        raise HTTPException(400, "Invalid organization role for this organization")
+    return role.id
 
 
 @router.get("", response_model=list[OrganizationOut])
@@ -148,18 +175,21 @@ async def add_current_org_member(
             )
         )
     ).scalar_one_or_none()
-    if existing:
+    if existing and existing.is_active:
         raise HTTPException(409, "User is already a member of this organization")
 
-    role_id = body.role_id
-    if role_id is None:
-        role = await get_role_by_slug(
-            db,
-            organization_id=ctx.organization_id,
-            role_type="organization",
-            slug="org_user",
-        )
-        role_id = role.id if role else None
+    role_id = await _resolve_org_role_id(
+        db,
+        organization_id=ctx.organization_id,
+        role_id=body.role_id,
+    )
+
+    if existing:
+        existing.is_active = True
+        existing.role_id = role_id
+        await db.commit()
+        await db.refresh(existing)
+        return _membership_out(existing, user)
 
     membership = OrganizationMembership(
         organization_id=ctx.organization_id,
@@ -170,6 +200,37 @@ async def add_current_org_member(
     db.add(membership)
     await db.commit()
     await db.refresh(membership)
+    return _membership_out(membership, user)
+
+
+@router.patch("/current/members/{user_id}", response_model=MembershipOut)
+async def update_current_org_member_role(
+    user_id: int,
+    body: MembershipRoleUpdate,
+    ctx: WorkspaceContext = Depends(require_org_context),
+    db: AsyncSession = Depends(get_db),
+):
+    await require_permission(db, ctx, "organizations.manage_members")
+    membership = (
+        await db.execute(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == ctx.organization_id,
+                OrganizationMembership.user_id == user_id,
+                OrganizationMembership.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if not membership:
+        raise HTTPException(404, "Organization membership not found")
+
+    membership.role_id = await _resolve_org_role_id(
+        db,
+        organization_id=ctx.organization_id,
+        role_id=body.role_id,
+    )
+    await db.commit()
+    await db.refresh(membership)
+    user = await db.get(User, user_id)
     return _membership_out(membership, user)
 
 

@@ -10,6 +10,7 @@ from models.invitation import Invitation
 from models.organization import Organization
 from models.organization_membership import OrganizationMembership
 from models.password_reset_token import PasswordResetToken
+from models.project import Project
 from models.project_membership import ProjectMembership
 from models.user import User
 from schemas.schemas import (
@@ -33,7 +34,7 @@ from services.auth import (
     set_session_cookies,
 )
 from services.context import WorkspaceContext, require_org_context
-from services.permissions import require_permission
+from services.permissions import get_role_by_id, get_role_by_slug, require_permission
 from services.security import generate_token, hash_password, hash_token, normalize_email
 from services.workspaces import create_organization_with_defaults
 
@@ -130,6 +131,29 @@ async def signup(
 
     if invitation:
         role_id = invitation.org_role_id
+        if role_id is None:
+            default_org_role = await get_role_by_slug(
+                db,
+                organization_id=invitation.organization_id,
+                role_type="organization",
+                slug="org_user",
+            )
+            role_id = default_org_role.id if default_org_role else None
+        else:
+            scoped_org_role = await get_role_by_id(
+                db,
+                organization_id=invitation.organization_id,
+                role_type="organization",
+                role_id=role_id,
+            )
+            if not scoped_org_role:
+                default_org_role = await get_role_by_slug(
+                    db,
+                    organization_id=invitation.organization_id,
+                    role_type="organization",
+                    slug="org_user",
+                )
+                role_id = default_org_role.id if default_org_role else None
         existing_membership = (
             await db.execute(
                 select(OrganizationMembership).where(
@@ -147,12 +171,42 @@ async def signup(
                     is_active=True,
                 )
             )
+        else:
+            if not existing_membership.is_active:
+                existing_membership.is_active = True
+            if existing_membership.role_id is None and role_id is not None:
+                existing_membership.role_id = role_id
+
+        default_project_role_id: int | None = None
 
         for assignment in invitation.project_assignments or []:
             project_id = assignment.get("project_id")
             project_role_id = assignment.get("role_id")
             if not isinstance(project_id, int):
                 continue
+            project = await db.get(Project, project_id)
+            if not project or project.organization_id != invitation.organization_id:
+                continue
+            resolved_project_role_id: int | None = project_role_id if isinstance(project_role_id, int) else None
+            if resolved_project_role_id is not None:
+                scoped_project_role = await get_role_by_id(
+                    db,
+                    organization_id=invitation.organization_id,
+                    role_type="project",
+                    role_id=resolved_project_role_id,
+                )
+                if not scoped_project_role:
+                    resolved_project_role_id = None
+            if resolved_project_role_id is None:
+                if default_project_role_id is None:
+                    default_project_role = await get_role_by_slug(
+                        db,
+                        organization_id=invitation.organization_id,
+                        role_type="project",
+                        slug="project_user",
+                    )
+                    default_project_role_id = default_project_role.id if default_project_role else None
+                resolved_project_role_id = default_project_role_id
             existing_pm = (
                 await db.execute(
                     select(ProjectMembership).where(
@@ -168,10 +222,15 @@ async def signup(
                         organization_id=invitation.organization_id,
                         project_id=project_id,
                         user_id=user.id,
-                        role_id=project_role_id if isinstance(project_role_id, int) else None,
+                        role_id=resolved_project_role_id,
                         is_active=True,
                     )
                 )
+            else:
+                if not existing_pm.is_active:
+                    existing_pm.is_active = True
+                if existing_pm.role_id is None and resolved_project_role_id is not None:
+                    existing_pm.role_id = resolved_project_role_id
 
         invitation.accepted_at = _utcnow()
 

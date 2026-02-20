@@ -8,7 +8,7 @@ from models.organization_role_permission import OrganizationRolePermission
 from models.permission import Permission
 from models.project_role import ProjectRole
 from models.project_role_permission import ProjectRolePermission
-from schemas.schemas import RoleCreate, RoleOut, RolePermissionUpdate
+from schemas.schemas import RoleCreate, RoleOut, RolePermissionOut, RolePermissionUpdate
 from services.context import WorkspaceContext, require_org_context
 from services.permissions import require_permission
 
@@ -137,6 +137,30 @@ async def set_organization_role_permissions(
     return {"ok": True}
 
 
+@router.get("/organization/{role_id}/permissions", response_model=list[RolePermissionOut])
+async def list_organization_role_permissions(
+    role_id: int,
+    ctx: WorkspaceContext = Depends(require_org_context),
+    db: AsyncSession = Depends(get_db),
+):
+    await require_permission(db, ctx, "organizations.manage_permissions")
+    role = await db.get(OrganizationRole, role_id)
+    if not role or role.organization_id != ctx.organization_id:
+        raise HTTPException(404, "Organization role not found")
+
+    rows = (
+        await db.execute(
+            select(OrganizationRolePermission).where(
+                OrganizationRolePermission.role_id == role_id
+            )
+        )
+    ).scalars().all()
+    return [
+        RolePermissionOut(permission_id=row.permission_id, effect=row.effect)
+        for row in rows
+    ]
+
+
 @router.put("/project/{role_id}/permissions")
 async def set_project_role_permissions(
     role_id: int,
@@ -165,3 +189,27 @@ async def set_project_role_permissions(
         )
     await db.commit()
     return {"ok": True}
+
+
+@router.get("/project/{role_id}/permissions", response_model=list[RolePermissionOut])
+async def list_project_role_permissions(
+    role_id: int,
+    ctx: WorkspaceContext = Depends(require_org_context),
+    db: AsyncSession = Depends(get_db),
+):
+    await require_permission(db, ctx, "organizations.manage_permissions")
+    role = await db.get(ProjectRole, role_id)
+    if not role or role.organization_id != ctx.organization_id:
+        raise HTTPException(404, "Project role not found")
+
+    rows = (
+        await db.execute(
+            select(ProjectRolePermission).where(
+                ProjectRolePermission.role_id == role_id
+            )
+        )
+    ).scalars().all()
+    return [
+        RolePermissionOut(permission_id=row.permission_id, effect=row.effect)
+        for row in rows
+    ]

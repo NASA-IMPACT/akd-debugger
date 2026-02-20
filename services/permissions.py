@@ -154,6 +154,27 @@ async def get_role_by_slug(
     return (await db.execute(stmt)).scalar_one_or_none()
 
 
+async def get_role_by_id(
+    db: AsyncSession,
+    *,
+    organization_id: int,
+    role_type: str,
+    role_id: int,
+) -> OrganizationRole | ProjectRole | None:
+    if role_type == "organization":
+        stmt = select(OrganizationRole).where(
+            OrganizationRole.id == role_id,
+            OrganizationRole.organization_id == organization_id,
+        )
+        return (await db.execute(stmt)).scalar_one_or_none()
+
+    stmt = select(ProjectRole).where(
+        ProjectRole.id == role_id,
+        ProjectRole.organization_id == organization_id,
+    )
+    return (await db.execute(stmt)).scalar_one_or_none()
+
+
 async def has_permission(
     db: AsyncSession,
     ctx: WorkspaceContext,

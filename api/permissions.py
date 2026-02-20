@@ -3,6 +3,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
+from models.organization_membership import OrganizationMembership
 from models.permission import Permission
 from models.project import Project
 from models.user import User
@@ -52,6 +53,17 @@ async def create_user_grant(
     user = await db.get(User, body.user_id)
     if not user:
         raise HTTPException(404, "User not found")
+    org_membership = (
+        await db.execute(
+            select(OrganizationMembership).where(
+                OrganizationMembership.organization_id == ctx.organization_id,
+                OrganizationMembership.user_id == body.user_id,
+                OrganizationMembership.is_active.is_(True),
+            )
+        )
+    ).scalar_one_or_none()
+    if not org_membership:
+        raise HTTPException(400, "User must be an active organization member before adding grants")
 
     permission = await db.get(Permission, body.permission_id)
     if not permission:
@@ -61,6 +73,8 @@ async def create_user_grant(
         project = await db.get(Project, body.project_id)
         if not project or project.organization_id != ctx.organization_id:
             raise HTTPException(400, "Invalid project_id for this organization")
+    if (body.resource_type is None) != (body.resource_id is None):
+        raise HTTPException(400, "resource_type and resource_id must both be set or both be null")
 
     grant = UserPermissionGrant(
         organization_id=ctx.organization_id,

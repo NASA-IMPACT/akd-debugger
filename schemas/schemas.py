@@ -533,6 +533,11 @@ class RolePermissionUpdate(BaseModel):
     effect: Literal["allow", "deny"] = "allow"
 
 
+class RolePermissionOut(BaseModel):
+    permission_id: int
+    effect: Literal["allow", "deny"]
+
+
 class RoleCreate(BaseModel):
     name: str
     slug: str
@@ -605,6 +610,14 @@ class MembershipCreate(BaseModel):
 
 class ProjectMembershipCreate(BaseModel):
     user_id: int
+    role_id: int | None = None
+
+
+class MembershipRoleUpdate(BaseModel):
+    role_id: int | None = None
+
+
+class ProjectMembershipRoleUpdate(BaseModel):
     role_id: int | None = None
 
 
