@@ -28,11 +28,24 @@ def _utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def _cookie_params() -> dict:
+def _is_request_secure(request: Request | None) -> bool:
+    if not request:
+        return False
+    forwarded_proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
+    if forwarded_proto:
+        return forwarded_proto == "https"
+    return request.url.scheme == "https"
+
+
+def _cookie_params(request: Request | None = None) -> dict:
     settings = get_settings()
+    secure = settings.COOKIE_SECURE
+    # Secure cookies are ignored by browsers on plain HTTP.
+    if secure and not _is_request_secure(request):
+        secure = False
     return {
         "httponly": True,
-        "secure": settings.COOKIE_SECURE,
+        "secure": secure,
         "samesite": "lax",
         "domain": settings.SESSION_COOKIE_DOMAIN,
         "path": "/",
@@ -80,8 +93,8 @@ async def issue_session_pair(db: AsyncSession, user: User, request: Request | No
     )
 
 
-def set_session_cookies(response: Response, pair: SessionPair) -> None:
-    params = _cookie_params()
+def set_session_cookies(response: Response, pair: SessionPair, request: Request | None = None) -> None:
+    params = _cookie_params(request)
     response.set_cookie(
         ACCESS_COOKIE_NAME,
         pair.access_token,

@@ -179,7 +179,7 @@ async def signup(
     await db.refresh(user)
 
     pair = await issue_session_pair(db, user, request=request)
-    set_session_cookies(response, pair)
+    set_session_cookies(response, pair, request=request)
     return await _session_payload(db, user)
 
 
@@ -192,7 +192,7 @@ async def login(
 ):
     user = await authenticate_credentials(db, normalize_email(body.email), body.password)
     pair = await issue_session_pair(db, user, request=request)
-    set_session_cookies(response, pair)
+    set_session_cookies(response, pair, request=request)
     return await _session_payload(db, user)
 
 
@@ -218,7 +218,7 @@ async def refresh_session(
     if not refresh_token:
         raise HTTPException(401, "Refresh cookie is missing")
     user, pair = await rotate_access_from_refresh(db, refresh_token, request=request)
-    set_session_cookies(response, pair)
+    set_session_cookies(response, pair, request=request)
     return await _session_payload(db, user)
 
 
