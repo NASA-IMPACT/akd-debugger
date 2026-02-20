@@ -8,6 +8,7 @@ import { rolesApi } from "@/lib/api/roles";
 import { useAuth } from "@/providers/auth-provider";
 
 type PermissionEffect = "inherit" | "allow" | "deny";
+const PROTECTED_PROJECT_ROLE_SLUGS = new Set(["project_admin", "project_user"]);
 
 function slugify(value: string): string {
   return value
@@ -81,9 +82,12 @@ export default function ProjectRolesSettingsPage() {
     }));
   }, [permissions]);
 
-  const deletableRoles = projectRoles.filter((role) => !role.is_builtin);
+  const deletableRoles = projectRoles.filter(
+    (role) => !role.is_builtin && !PROTECTED_PROJECT_ROLE_SLUGS.has(role.slug)
+  );
   const deleteRoleIdNum = deleteRoleId ? Number(deleteRoleId) : null;
   const replacementRoleIdNum = replacementRoleId ? Number(replacementRoleId) : null;
+  const roleToDelete = projectRoles.find((role) => String(role.id) === deleteRoleId) ?? null;
 
   const createProjectRole = useMutation({
     mutationFn: () =>
@@ -243,7 +247,7 @@ export default function ProjectRolesSettingsPage() {
       <section className="clean-section space-y-3">
         <h2 className="font-semibold text-red-500">Delete Role</h2>
         <p className="text-xs text-muted">
-          Built-in roles cannot be deleted. If active users are assigned to a role, choose a replacement role before deleting.
+          Default and built-in roles cannot be deleted. If active users are assigned to a role, choose a replacement role before deleting.
         </p>
         <div className="grid gap-2 md:grid-cols-2">
           <label className="text-xs text-muted">
@@ -286,7 +290,17 @@ export default function ProjectRolesSettingsPage() {
           type="button"
           className="btn-subtle !text-red-500 !border-red-500/40 hover:!bg-red-500/10"
           disabled={deleteRoleMutation.isPending || !deleteRoleId}
-          onClick={() => deleteRoleMutation.mutate()}
+          onClick={() => {
+            if (!roleToDelete) return;
+            const roleLabel = `${formatRoleNameForViewer(roleToDelete.name, user?.email)} (${formatRoleSlugForViewer(roleToDelete.slug, user?.email)})`;
+            const ok = window.confirm(
+              replacementRoleId
+                ? `Are you sure you want to delete role ${roleLabel}? Assigned users will be moved to the selected replacement role.`
+                : `Are you sure you want to delete role ${roleLabel}?`
+            );
+            if (!ok) return;
+            deleteRoleMutation.mutate();
+          }}
         >
           {deleteRoleMutation.isPending ? "Deleting..." : "Delete role"}
         </button>

@@ -16,6 +16,8 @@ from services.context import WorkspaceContext, require_org_context
 from services.permissions import require_permission
 
 router = APIRouter()
+PROTECTED_ORGANIZATION_ROLE_SLUGS = {"org_admin", "org_user"}
+PROTECTED_PROJECT_ROLE_SLUGS = {"project_admin", "project_user"}
 
 
 @router.get("/organization", response_model=list[RoleOut])
@@ -45,6 +47,8 @@ async def delete_organization_role(
     role = await db.get(OrganizationRole, role_id)
     if not role or role.organization_id != ctx.organization_id:
         raise HTTPException(404, "Organization role not found")
+    if role.slug in PROTECTED_ORGANIZATION_ROLE_SLUGS:
+        raise HTTPException(400, "Default organization roles cannot be deleted")
     if role.is_builtin:
         raise HTTPException(400, "Built-in organization roles cannot be deleted")
 
@@ -149,6 +153,8 @@ async def delete_project_role(
     role = await db.get(ProjectRole, role_id)
     if not role or role.organization_id != ctx.organization_id:
         raise HTTPException(404, "Project role not found")
+    if role.slug in PROTECTED_PROJECT_ROLE_SLUGS:
+        raise HTTPException(400, "Default project roles cannot be deleted")
     if role.is_builtin:
         raise HTTPException(400, "Built-in project roles cannot be deleted")
 
