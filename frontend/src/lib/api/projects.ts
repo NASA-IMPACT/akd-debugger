@@ -57,6 +57,13 @@ export const projectsApi = {
       headers: orgHeaders(options),
     }),
 
+  updateMemberRole: (projectId: number, userId: number, roleId?: number | null, options?: ProjectRequestOptions) =>
+    apiFetch<ProjectMembershipOut>(`/api/projects/${projectId}/members/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role_id: roleId ?? null }),
+      headers: orgHeaders(options),
+    }),
+
   removeMember: (projectId: number, userId: number, options?: ProjectRequestOptions) =>
     apiFetch<void>(`/api/projects/${projectId}/members/${userId}`, {
       method: "DELETE",

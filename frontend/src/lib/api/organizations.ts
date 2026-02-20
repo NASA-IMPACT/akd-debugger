@@ -49,6 +49,13 @@ export const organizationsApi = {
       headers: orgHeaders(options),
     }),
 
+  updateMemberRole: (userId: number, roleId?: number | null, options?: OrganizationRequestOptions) =>
+    apiFetch<MembershipOut>(`/api/organizations/current/members/${userId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ role_id: roleId ?? null }),
+      headers: orgHeaders(options),
+    }),
+
   removeMember: (userId: number, options?: OrganizationRequestOptions) =>
     apiFetch<void>(`/api/organizations/current/members/${userId}`, {
       method: "DELETE",

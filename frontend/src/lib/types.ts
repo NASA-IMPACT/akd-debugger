@@ -580,6 +580,11 @@ export interface RoleOut {
   created_at: string;
 }
 
+export interface RolePermissionOut {
+  permission_id: number;
+  effect: "allow" | "deny";
+}
+
 export interface PermissionOut {
   id: number;
   key: string;
