@@ -3,14 +3,18 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { invitationsApi } from "@/lib/api/invitations";
+import { withCurrentOrigin } from "@/lib/invitation-links";
 import { organizationsApi } from "@/lib/api/organizations";
 import { projectsApi } from "@/lib/api/projects";
+import { rolesApi } from "@/lib/api/roles";
 import { useWorkspace } from "@/providers/workspace-provider";
 
 export default function MembersSettingsPage() {
   const queryClient = useQueryClient();
   const { organizationId, projectId } = useWorkspace();
   const [email, setEmail] = useState("");
+  const [inviteOrgRoleId, setInviteOrgRoleId] = useState("");
+  const [projectRoleId, setProjectRoleId] = useState("");
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const [formMessage, setFormMessage] = useState<string | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -32,6 +36,22 @@ export default function MembersSettingsPage() {
     queryFn: () => organizationsApi.listMembers({ organizationId }),
     enabled: organizationId !== null,
   });
+  const {
+    data: organizationRoles = [],
+    error: organizationRolesError,
+  } = useQuery({
+    queryKey: ["organization-roles-for-project-members", organizationId],
+    queryFn: () => rolesApi.listOrganization(),
+    enabled: organizationId !== null,
+  });
+  const {
+    data: projectRoles = [],
+    error: projectRolesError,
+  } = useQuery({
+    queryKey: ["project-roles-for-project-members", organizationId],
+    queryFn: () => rolesApi.listProject(),
+    enabled: organizationId !== null,
+  });
 
   const projectMemberIds = useMemo(
     () => new Set(projectMembers.map((m) => m.user_id)),
@@ -45,6 +65,16 @@ export default function MembersSettingsPage() {
     });
     return byEmail;
   }, [organizationMembers]);
+  const projectRoleNameById = useMemo(
+    () => new Map(projectRoles.map((role) => [role.id, role.name])),
+    [projectRoles]
+  );
+
+  function selectedRoleIdOrNull(raw: string): number | null {
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isInteger(n) && n > 0 ? n : null;
+  }
 
   const addMutation = useMutation({
     mutationFn: async () => {
@@ -55,6 +85,8 @@ export default function MembersSettingsPage() {
       if (!normalizedEmail || !normalizedEmail.includes("@")) {
         throw new Error("Enter a valid email");
       }
+      const selectedProjectRoleId = selectedRoleIdOrNull(projectRoleId);
+      const selectedOrgRoleId = selectedRoleIdOrNull(inviteOrgRoleId);
 
       const orgMember = normalizedEmailMap.get(normalizedEmail);
       if (orgMember) {
@@ -64,21 +96,26 @@ export default function MembersSettingsPage() {
             message: `${orgMember.user_full_name || orgMember.user_email || "User"} is already in this project.`,
           };
         }
-        await projectsApi.addMember(projectId, orgMember.user_id);
+        await projectsApi.addMember(projectId, orgMember.user_id, selectedProjectRoleId);
         return {
           type: "added" as const,
           message: `${orgMember.user_full_name || orgMember.user_email || "User"} was added to this project.`,
         };
       }
 
+      const assignment =
+        selectedProjectRoleId === null
+          ? { project_id: projectId }
+          : { project_id: projectId, role_id: selectedProjectRoleId };
       const invitation = await invitationsApi.create({
         email: normalizedEmail,
-        project_assignments: [{ project_id: projectId }],
+        org_role_id: selectedOrgRoleId,
+        project_assignments: [assignment],
       });
       return {
         type: "invited" as const,
         message: "User is not in this organization yet. Invitation link generated.",
-        inviteLink: invitation.invite_link || null,
+        inviteLink: withCurrentOrigin(invitation.invite_link),
       };
     },
     onSuccess: async (result) => {
@@ -98,6 +135,18 @@ export default function MembersSettingsPage() {
       setFormError(err instanceof Error ? err.message : "Failed to add member");
     },
   });
+  const updateRoleMutation = useMutation({
+    mutationFn: ({ userId, roleId }: { userId: number; roleId: number | null }) =>
+      projectsApi.updateMemberRole(projectId as number, userId, roleId),
+    onSuccess: async () => {
+      setFormError(null);
+      setFormMessage("Member role updated.");
+      await queryClient.invalidateQueries({ queryKey: ["project-members", projectId] });
+    },
+    onError: (err) => {
+      setFormError(err instanceof Error ? err.message : "Failed to update member role");
+    },
+  });
 
   const removeMutation = useMutation({
     mutationFn: (uid: number) => projectsApi.removeMember(projectId as number, uid),
@@ -110,6 +159,9 @@ export default function MembersSettingsPage() {
   });
 
   const queryError = error instanceof Error ? error.message : null;
+  const orgRolesErrorMessage = organizationRolesError instanceof Error ? organizationRolesError.message : null;
+  const projectRolesErrorMessage = projectRolesError instanceof Error ? projectRolesError.message : null;
+  const roleSaveUserId = updateRoleMutation.variables?.userId ?? null;
 
   async function copyInviteLink() {
     if (!inviteLink) return;
@@ -133,6 +185,40 @@ export default function MembersSettingsPage() {
         <p className="text-xs text-muted mb-2">
           If the email is already in this organization, the user is added directly. If not, an invite link is generated for this organization and this project.
         </p>
+        <div className="grid gap-2 md:grid-cols-2 mb-2">
+          <label className="text-xs text-muted">
+            Organization role for invited users
+            <select
+              className="mt-1 w-full rounded-md border border-border px-3 py-2 bg-card text-sm"
+              value={inviteOrgRoleId}
+              onChange={(e) => setInviteOrgRoleId(e.target.value)}
+              disabled={projectId === null || addMutation.isPending}
+            >
+              <option value="">Default organization role (org_user)</option>
+              {organizationRoles.map((role) => (
+                <option key={role.id} value={String(role.id)}>
+                  {role.name} ({role.slug})
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs text-muted">
+            Project role
+            <select
+              className="mt-1 w-full rounded-md border border-border px-3 py-2 bg-card text-sm"
+              value={projectRoleId}
+              onChange={(e) => setProjectRoleId(e.target.value)}
+              disabled={projectId === null || addMutation.isPending}
+            >
+              <option value="">Default project role (project_user)</option>
+              {projectRoles.map((role) => (
+                <option key={role.id} value={String(role.id)}>
+                  {role.name} ({role.slug})
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <div className="flex gap-2">
           <input
             className="flex-1 rounded-md border border-border px-3 py-2 bg-card"
@@ -150,6 +236,8 @@ export default function MembersSettingsPage() {
             {addMutation.isPending ? "Processing..." : "Add / Invite"}
           </button>
         </div>
+        {orgRolesErrorMessage && <div className="mt-2 text-xs text-muted">Organization roles unavailable: {orgRolesErrorMessage}</div>}
+        {projectRolesErrorMessage && <div className="mt-1 text-xs text-muted">Project roles unavailable: {projectRolesErrorMessage}</div>}
         {formMessage && <div className="mt-2 text-sm text-muted">{formMessage}</div>}
         {formError && <div className="mt-2 text-sm text-red-500">{formError}</div>}
         {inviteLink && (
@@ -183,13 +271,40 @@ export default function MembersSettingsPage() {
                   <div className="text-sm text-foreground truncate">{m.user_full_name || "Unnamed user"}</div>
                   <div className="text-xs text-muted truncate">{m.user_email || `User #${m.user_id}`}</div>
                 </div>
-                <button
-                  onClick={() => removeMutation.mutate(m.user_id)}
-                  className="text-sm text-red-500"
-                  disabled={removeMutation.isPending}
-                >
-                  Remove
-                </button>
+                <div className="flex items-center gap-2">
+                  <select
+                    className="rounded-md border border-border px-2 py-1 bg-card text-xs"
+                    value={m.role_id ? String(m.role_id) : ""}
+                    disabled={updateRoleMutation.isPending || projectRoles.length === 0}
+                    onChange={(e) =>
+                      updateRoleMutation.mutate({
+                        userId: m.user_id,
+                        roleId: selectedRoleIdOrNull(e.target.value),
+                      })
+                    }
+                  >
+                    <option value="">Default project role (project_user)</option>
+                    {projectRoles.map((role) => (
+                      <option key={role.id} value={String(role.id)}>
+                        {role.name}
+                      </option>
+                    ))}
+                  </select>
+                  {roleSaveUserId === m.user_id && updateRoleMutation.isPending ? (
+                    <div className="text-xs text-muted">Saving...</div>
+                  ) : (
+                    <div className="text-xs text-muted">
+                      {m.role_id ? projectRoleNameById.get(m.role_id) || `Role #${m.role_id}` : "Default role"}
+                    </div>
+                  )}
+                  <button
+                    onClick={() => removeMutation.mutate(m.user_id)}
+                    className="text-sm text-red-500"
+                    disabled={removeMutation.isPending}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>
