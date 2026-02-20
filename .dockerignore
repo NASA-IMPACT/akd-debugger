@@ -1,21 +1,24 @@
-# Ignore version control files
 .git
 .gitignore
+.github
+.claude
 
-# Ignore build artifacts and cache
 __pycache__
 *.pyc
 *.log
+*.egg-info
 
-# Ignore dependency directories
 node_modules
-vendor
+frontend/node_modules
+frontend/.next
 
-# Ignore sensitive environment files
 .env
 .aws
 
-# You can also list the Dockerfile and .dockerignore file itself; 
-# Docker still receives them for the build process but won't copy them into the final image
 Dockerfile
+docker-compose*.yml
 .dockerignore
+
+docs
+README.md
+start.sh

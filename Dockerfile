@@ -1,14 +1,5 @@
-### Stage 1: Build frontend
-FROM node:20-alpine AS frontend-build
-
-WORKDIR /frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-COPY frontend/ .
-RUN npm run build
-
-### Stage 2: Python application
-FROM python:3.13-slim
+### Build stage — install dependencies
+FROM python:3.13-slim AS build
 
 WORKDIR /app
 
@@ -21,11 +12,15 @@ RUN uv sync --no-dev
 
 COPY . .
 
-# Copy built frontend static output
-COPY --from=frontend-build /frontend/.next/standalone ./frontend-standalone
-COPY --from=frontend-build /frontend/.next/static ./frontend-standalone/.next/static
-COPY --from=frontend-build /frontend/public ./frontend-standalone/public
+### Runtime stage — slim image without build tools
+FROM python:3.13-slim
 
-EXPOSE 8000 3000
+WORKDIR /app
 
-CMD ["uv", "run", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--timeout-keep-alive", "120"]
+COPY --from=build /app /app
+
+ENV PATH="/app/.venv/bin:$PATH"
+
+EXPOSE 8000
+
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "4", "--timeout-keep-alive", "120"]
