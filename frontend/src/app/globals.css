@@ -226,23 +226,15 @@ body::before {
 
 [data-theme="dark"][data-existential-mode="true"] body::before {
   background:
-    radial-gradient(ellipse at center, rgba(4, 5, 11, 0) 0%, rgba(6, 7, 13, 0.54) 56%, rgba(7, 8, 14, 0.9) 100%),
-    repeating-conic-gradient(
-      from 10deg at 50% 56%,
-      rgba(112, 138, 233, 0.14) 0deg 9deg,
-      rgba(31, 43, 86, 0.02) 9deg 18deg,
-      rgba(80, 103, 188, 0.12) 18deg 28deg,
-      rgba(17, 24, 49, 0.02) 28deg 38deg
-    ),
-    radial-gradient(circle at 50% 56%, rgba(127, 152, 245, 0.22) 0, rgba(127, 152, 245, 0) 43%),
+    url("/existential-overlay.svg") center / cover no-repeat,
+    radial-gradient(ellipse at center, rgba(4, 5, 11, 0) 0%, rgba(6, 7, 13, 0.56) 58%, rgba(7, 8, 14, 0.9) 100%),
+    radial-gradient(circle at 50% 56%, rgba(127, 152, 245, 0.14) 0, rgba(127, 152, 245, 0) 41%),
     radial-gradient(circle at 16% 18%, rgba(145, 161, 255, 0.12) 0, rgba(145, 161, 255, 0) 36%),
     radial-gradient(circle at 78% 12%, rgba(92, 121, 212, 0.08) 0, rgba(92, 121, 212, 0) 28%),
     radial-gradient(circle at 62% 72%, rgba(116, 132, 198, 0.08) 0, rgba(116, 132, 198, 0) 34%),
     radial-gradient(circle at 84% 82%, rgba(255, 255, 255, 0.065) 0, rgba(255, 255, 255, 0) 1.2%),
     radial-gradient(circle at 26% 66%, rgba(255, 255, 255, 0.055) 0, rgba(255, 255, 255, 0) 1.1%),
     linear-gradient(180deg, #090910 0%, #0b0a12 42%, #0a0a0f 100%);
-  transform-origin: 50% 56%;
-  animation: existential-galaxy-spin 160s linear infinite;
 }
 
 [data-theme="dark"][data-existential-mode="true"] body::after {
@@ -251,30 +243,40 @@ body::before {
   inset: 0;
   z-index: -1;
   pointer-events: none;
-  opacity: 0.36;
-  background-image: url("/existential-overlay.svg");
-  background-repeat: no-repeat;
-  background-size: cover;
-  background-position: center;
-  mix-blend-mode: screen;
-  animation: existential-overlay-drift 72s ease-in-out infinite alternate;
+  opacity: 0.24;
+  background:
+    radial-gradient(circle at 50% 56%, rgba(255, 226, 170, 0.24) 0 0.52%, rgba(255, 226, 170, 0.09) 0.52% 1.14%, rgba(255, 226, 170, 0) 1.62%),
+    radial-gradient(circle at 50% 56%, transparent 6.2%, rgba(181, 198, 255, 0.11) 6.28% 6.36%, transparent 6.48%),
+    radial-gradient(circle at 50% 56%, transparent 9.7%, rgba(168, 190, 255, 0.1) 9.78% 9.86%, transparent 9.98%),
+    radial-gradient(circle at 50% 56%, transparent 13.1%, rgba(155, 180, 255, 0.09) 13.18% 13.26%, transparent 13.38%),
+    radial-gradient(circle at 50% 56%, transparent 17.2%, rgba(141, 169, 246, 0.08) 17.28% 17.36%, transparent 17.5%),
+    radial-gradient(circle at 50% 56%, transparent 22.8%, rgba(130, 160, 237, 0.07) 22.88% 22.96%, transparent 23.1%),
+    radial-gradient(circle at 50% 56%, transparent 28.8%, rgba(118, 149, 226, 0.06) 28.88% 28.96%, transparent 29.12%),
+    radial-gradient(circle at 50% 56%, transparent 35.5%, rgba(109, 140, 214, 0.05) 35.58% 35.66%, transparent 35.85%),
+    radial-gradient(circle at 56.3% 56%, rgba(229, 218, 194, 0.58) 0 0.22%, rgba(229, 218, 194, 0) 0.28%),
+    radial-gradient(circle at 50% 46.1%, rgba(236, 201, 150, 0.55) 0 0.28%, rgba(236, 201, 150, 0) 0.35%),
+    radial-gradient(circle at 36.9% 56%, rgba(140, 189, 255, 0.58) 0 0.3%, rgba(140, 189, 255, 0) 0.37%),
+    radial-gradient(circle at 50% 73.3%, rgba(215, 133, 106, 0.56) 0 0.25%, rgba(215, 133, 106, 0) 0.33%),
+    radial-gradient(circle at 74.8% 56%, rgba(224, 186, 138, 0.52) 0 0.52%, rgba(224, 186, 138, 0) 0.62%),
+    radial-gradient(circle at 50% 27.1%, rgba(219, 188, 129, 0.5) 0 0.44%, rgba(219, 188, 129, 0) 0.56%),
+    radial-gradient(circle at 18.9% 56%, rgba(150, 207, 255, 0.5) 0 0.38%, rgba(150, 207, 255, 0) 0.5%),
+    radial-gradient(circle at 50% 91.7%, rgba(126, 170, 255, 0.5) 0 0.38%, rgba(126, 170, 255, 0) 0.5%);
+  transform-origin: 50% 56%;
+  animation: existential-orbit-rotate 420s linear infinite;
 }
 
-@keyframes existential-overlay-drift {
+@keyframes existential-orbit-rotate {
   0% {
-    transform: translate3d(0, 0, 0) scale(1.01);
+    transform: rotate(0deg);
   }
   100% {
-    transform: translate3d(0.35%, -0.25%, 0) scale(1.025);
+    transform: rotate(360deg);
   }
 }
 
-@keyframes existential-galaxy-spin {
-  0% {
-    transform: rotate(0deg) scale(1.04);
-  }
-  100% {
-    transform: rotate(360deg) scale(1.04);
+@media (prefers-reduced-motion: reduce) {
+  [data-theme="dark"][data-existential-mode="true"] body::after {
+    animation: none;
   }
 }
 
